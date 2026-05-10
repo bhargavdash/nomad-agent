@@ -5,6 +5,12 @@ The output (`TravelSignals`) is consumed by every downstream agent to
 shape search queries and weighting.
 
 Matches section 3 of AI_INTEGRATION_PLAN.md.
+
+Why this layer exists:
+  Without it, every Goa trip gets the same query regardless of dates.
+  With it, Goa-in-December (peak season, NYE festival, "very_high" crowd)
+  produces fundamentally different search queries than Goa-in-July
+  (monsoon, "low" crowd, indoor-activities focus).
 """
 
 from __future__ import annotations
@@ -15,21 +21,493 @@ from datetime import date
 from app.schemas import TripParams
 
 
+# ---------------------------------------------------------------------------
+# Output shape (kept backward-compatible — downstream agents read these fields)
+# ---------------------------------------------------------------------------
+
+
 @dataclass
 class TravelSignals:
-    season: str  # "winter" | "spring" | "summer" | "monsoon" | "autumn"
+    # Geography
+    region: str  # "india" | "southeast_asia" | "europe" | "north_america" | "oceania" | "unknown"
+
+    # Time / weather
+    season: str  # "winter" | "spring" | "summer" | "monsoon" | "autumn" | "peak" | "shoulder" | "unknown"
+    weather_hint: str | None  # short tag, e.g. "monsoon-flooding-risk", "snow-pass-closures"
+
+    # Festivals
     is_festival_window: bool
-    festival_name: str | None
-    crowd_level: str  # "low" | "moderate" | "peak"
-    weather_hint: str | None
+    festival_name: str | None  # first active festival (back-compat)
+    active_festivals: list[str]  # all festivals overlapping the trip window
+
+    # Crowds
+    crowd_level: str  # "low" | "moderate" | "peak" | "very_peak"
+
+    # Trip shape (from trip_params, surfaced for downstream convenience)
     budget_tier: str  # "shoestring" | "mid" | "premium" | "luxury"
     pace_density: int  # stops per day: 3 | 4 | 5
+
+    # Search shaping
     vibe_source_weights: dict = field(default_factory=dict)
     query_modifiers: list[str] = field(default_factory=list)
 
+    # User-visible warnings (rendered in UI, e.g. "Monsoon — many beaches closed")
+    warnings: list[str] = field(default_factory=list)
+
 
 # ---------------------------------------------------------------------------
-# Lookup tables (intentionally small — placeholder MVP coverage).
+# Lookup tables — region detection
+# ---------------------------------------------------------------------------
+
+_REGION_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "india": (
+        "india", "goa", "manali", "jaipur", "delhi", "mumbai", "bangalore",
+        "kerala", "ladakh", "kashmir", "rajasthan", "varanasi", "udaipur",
+        "chennai", "pushkar", "rishikesh", "agra", "darjeeling", "shimla",
+    ),
+    "southeast_asia": (
+        "bali", "indonesia", "thailand", "bangkok", "phuket", "vietnam",
+        "hanoi", "ho chi minh", "singapore", "malaysia", "kuala lumpur",
+        "philippines", "manila", "cambodia", "angkor", "laos", "myanmar",
+        "sri lanka",
+    ),
+    "europe": (
+        "paris", "france", "italy", "rome", "milan", "venice", "florence",
+        "spain", "madrid", "barcelona", "germany", "berlin", "munich",
+        "london", "uk", "england", "scotland", "amsterdam", "netherlands",
+        "greece", "athens", "santorini", "portugal", "lisbon", "switzerland",
+        "vienna", "prague", "budapest",
+    ),
+    "north_america": (
+        "new york", "nyc", "usa", "united states", "los angeles", "san francisco",
+        "chicago", "miami", "las vegas", "seattle", "boston",
+        "canada", "toronto", "vancouver", "montreal",
+        "mexico", "mexico city", "cancun",
+    ),
+    "oceania": (
+        "sydney", "australia", "melbourne", "new zealand", "auckland", "queenstown",
+    ),
+}
+
+# Indian hill stations — peak in summer (Apr–Jun), counter to plains-India peak (Oct–Feb).
+_HILL_STATION_KEYWORDS = ("manali", "shimla", "ladakh", "darjeeling", "kashmir", "mussoorie")
+
+# Destinations whose "peak" is the dry winter (Nov–Feb).
+_WINTER_PEAK_KEYWORDS = ("goa", "kerala", "rajasthan", "jaipur", "udaipur", "pushkar", "agra")
+
+
+# ---------------------------------------------------------------------------
+# Festival database
+# Stored as (start_month, start_day, end_month, end_day, name, crowd_impact).
+# Year-wrap handled by checking month tuples.
+# Substring-keyed by destination — small set, MVP scope.
+# ---------------------------------------------------------------------------
+
+_Festival = tuple[int, int, int, int, str, str]  # high | medium | low
+
+_FESTIVALS: dict[str, list[_Festival]] = {
+    "goa": [
+        (12, 20, 1, 5, "Christmas/NYE", "high"),
+        (12, 27, 12, 31, "Sunburn Festival", "high"),
+        (2, 10, 2, 20, "Goa Carnival", "high"),
+        (3, 10, 3, 20, "Holi", "medium"),
+    ],
+    "manali": [
+        (10, 1, 10, 15, "Dussehra", "high"),
+    ],
+    "jaipur": [
+        (1, 19, 1, 23, "Jaipur Literature Festival", "medium"),
+        (10, 28, 11, 5, "Diwali", "high"),
+        (3, 10, 3, 20, "Holi", "high"),
+    ],
+    "delhi": [
+        (10, 28, 11, 5, "Diwali", "high"),
+        (3, 10, 3, 20, "Holi", "high"),
+    ],
+    "udaipur": [
+        (10, 28, 11, 5, "Diwali", "medium"),
+    ],
+    "varanasi": [
+        (10, 28, 11, 5, "Diwali", "high"),
+        (11, 1, 11, 30, "Dev Deepawali", "high"),
+    ],
+    "pushkar": [
+        (11, 1, 11, 15, "Pushkar Camel Fair", "high"),
+    ],
+    "kerala": [
+        (8, 25, 9, 10, "Onam", "medium"),
+    ],
+    "paris": [
+        (7, 12, 7, 16, "Bastille Day", "high"),
+        (11, 25, 12, 31, "Christmas Markets", "medium"),
+    ],
+    "munich": [
+        (9, 16, 10, 3, "Oktoberfest", "high"),
+    ],
+    "bali": [
+        (3, 10, 3, 15, "Nyepi (Day of Silence)", "medium"),
+    ],
+    "thailand": [
+        (4, 13, 4, 15, "Songkran", "high"),
+    ],
+    "bangkok": [
+        (4, 13, 4, 15, "Songkran", "high"),
+    ],
+    "new york": [
+        (12, 15, 1, 2, "Christmas/NYE", "high"),
+        (11, 22, 11, 28, "Thanksgiving", "high"),
+        (7, 2, 7, 5, "July 4th", "medium"),
+    ],
+    "nyc": [
+        (12, 15, 1, 2, "Christmas/NYE", "high"),
+        (11, 22, 11, 28, "Thanksgiving", "high"),
+        (7, 2, 7, 5, "July 4th", "medium"),
+    ],
+    "rio": [
+        (2, 10, 2, 20, "Carnival", "high"),
+    ],
+    "japan": [
+        (3, 25, 4, 10, "Cherry Blossom (Hanami)", "high"),
+    ],
+    "tokyo": [
+        (3, 25, 4, 10, "Cherry Blossom (Hanami)", "high"),
+    ],
+}
+
+
+# ---------------------------------------------------------------------------
+# Vibe → source weights
+# Returns weights for ("youtube", "reddit", "blog"). Sum is normalised to 1.0
+# so downstream synthesizer can use them as proportions directly.
+# ---------------------------------------------------------------------------
+
+# Per-vibe RAW weights (not normalised). Aggregation = average across vibes.
+_VIBE_WEIGHTS_RAW: dict[str, dict[str, float]] = {
+    # adventure-leaning vibes — Shorts capture authentic raw content
+    "adventure":          {"youtube": 1.5, "reddit": 1.2, "blog": 0.7},
+    "off the beaten path": {"youtube": 1.4, "reddit": 1.5, "blog": 0.5},
+    "hidden gems":        {"youtube": 1.4, "reddit": 1.5, "blog": 0.5},
+    "nightlife":          {"youtube": 1.5, "reddit": 1.3, "blog": 0.6},
+    "nature":             {"youtube": 1.3, "reddit": 1.0, "blog": 1.0},
+    "beaches":            {"youtube": 1.3, "reddit": 1.0, "blog": 1.0},
+    "beach":              {"youtube": 1.3, "reddit": 1.0, "blog": 1.0},
+
+    # blog-leaning vibes — curated, written guides best
+    "luxury":             {"youtube": 0.6, "reddit": 0.7, "blog": 1.5},
+    "iconic":             {"youtube": 0.7, "reddit": 0.7, "blog": 1.4},
+    "first time":         {"youtube": 0.8, "reddit": 0.9, "blog": 1.3},
+    "culture":            {"youtube": 0.8, "reddit": 1.0, "blog": 1.3},
+    "history":            {"youtube": 0.8, "reddit": 0.9, "blog": 1.3},
+    "spiritual":          {"youtube": 0.9, "reddit": 1.0, "blog": 1.3},
+    "relaxation":         {"youtube": 1.0, "reddit": 0.8, "blog": 1.2},
+
+    # reddit-leaning vibes — communities best for tips and warnings
+    "budget":             {"youtube": 1.0, "reddit": 1.5, "blog": 0.8},
+    "backpacking":        {"youtube": 1.1, "reddit": 1.5, "blog": 0.7},
+    "solo":               {"youtube": 1.0, "reddit": 1.5, "blog": 0.8},
+
+    # balanced vibes
+    "foodie":             {"youtube": 1.3, "reddit": 1.3, "blog": 1.0},
+    "street food":        {"youtube": 1.3, "reddit": 1.4, "blog": 0.9},
+    "shopping":           {"youtube": 1.0, "reddit": 1.0, "blog": 1.2},
+    "family":             {"youtube": 1.0, "reddit": 1.1, "blog": 1.2},
+    "romantic":           {"youtube": 0.9, "reddit": 0.8, "blog": 1.3},
+}
+
+
+def _normalise(weights: dict[str, float]) -> dict[str, float]:
+    """Normalise weights so they sum to 1.0. Defensive against zero sums."""
+    total = sum(weights.values())
+    if total <= 0:
+        # Fallback to even split.
+        return {"youtube": 1 / 3, "reddit": 1 / 3, "blog": 1 / 3}
+    return {k: round(v / total, 4) for k, v in weights.items()}
+
+
+def _vibe_weights(vibes: list[str]) -> dict[str, float]:
+    """Average per-vibe raw weights, then normalise to sum=1.0.
+
+    Unknown vibes are ignored. Empty list → even split.
+    """
+    matched: list[dict[str, float]] = []
+    for v in vibes:
+        key = v.strip().lower()
+        if key in _VIBE_WEIGHTS_RAW:
+            matched.append(_VIBE_WEIGHTS_RAW[key])
+
+    if not matched:
+        return {"youtube": 1 / 3, "reddit": 1 / 3, "blog": 1 / 3}
+
+    avg = {
+        "youtube": sum(w["youtube"] for w in matched) / len(matched),
+        "reddit": sum(w["reddit"] for w in matched) / len(matched),
+        "blog": sum(w["blog"] for w in matched) / len(matched),
+    }
+    return _normalise(avg)
+
+
+# ---------------------------------------------------------------------------
+# Region + season detection
+# ---------------------------------------------------------------------------
+
+
+def _detect_region(destination_lower: str) -> str:
+    for region, keywords in _REGION_KEYWORDS.items():
+        if any(kw in destination_lower for kw in keywords):
+            return region
+    return "unknown"
+
+
+def _midpoint_month(date_from: str | None, date_to: str | None) -> int | None:
+    """Return the month of the trip's midpoint date. None if dates unparseable."""
+    if not date_from:
+        return None
+    try:
+        d1 = date.fromisoformat(date_from)
+    except ValueError:
+        return None
+    if date_to:
+        try:
+            d2 = date.fromisoformat(date_to)
+            mid = d1 + (d2 - d1) / 2
+            return mid.month
+        except ValueError:
+            pass
+    return d1.month
+
+
+def _infer_season(
+    month: int | None, region: str, destination_lower: str
+) -> tuple[str, str | None, list[str]]:
+    """Return (season, weather_hint, query_modifiers).
+
+    Per-region rules. Hill-station override for India.
+    """
+    if month is None:
+        return "unknown", None, []
+
+    # Hill stations: Apr-Jun is peak (escape from plains heat).
+    if any(k in destination_lower for k in _HILL_STATION_KEYWORDS):
+        if month in (4, 5, 6):
+            return "peak", None, ["summer", "hill station season"]
+        if month in (7, 8, 9):
+            hint = None
+            if "manali" in destination_lower or "kashmir" in destination_lower:
+                hint = "monsoon-landslide-risk"
+            return "monsoon", hint, ["monsoon", "indoor activities"]
+        if month in (11, 12, 1, 2):
+            hint = None
+            if "ladakh" in destination_lower or "manali" in destination_lower:
+                hint = "snow-pass-closures"
+            return "winter", hint, ["winter", "snow"]
+        return "shoulder", None, ["shoulder season"]
+
+    # India (plains): Jun-Sep monsoon, Oct-Feb peak/winter, Mar-May summer-shoulder.
+    if region == "india":
+        if month in (6, 7, 8, 9):
+            return "monsoon", "monsoon-flooding-risk", ["monsoon", "indoor activities", "waterfalls"]
+        if any(k in destination_lower for k in _WINTER_PEAK_KEYWORDS) and month in (11, 12, 1, 2):
+            return "peak", None, ["peak season", "best weather"]
+        if month in (10, 11, 12, 1, 2):
+            return "winter", None, ["winter", "cool weather"]
+        # Mar-May: hot summer in plains.
+        return "summer", "heatwave-risk", ["summer", "early morning starts"]
+
+    # Southeast Asia: May-Oct rainy, Nov-Apr dry/peak.
+    if region == "southeast_asia":
+        if month in (5, 6, 7, 8, 9, 10):
+            return "monsoon", "monsoon-flooding-risk", ["rainy season", "indoor activities"]
+        return "peak", None, ["dry season", "peak season"]
+
+    # Europe: Jun-Aug peak, Mar-May & Sep-Oct shoulder, Nov-Feb winter.
+    if region == "europe":
+        if month in (6, 7, 8):
+            return "peak", None, ["summer", "peak season"]
+        if month in (3, 4, 5, 9, 10):
+            return "shoulder", None, ["shoulder season", "moderate weather"]
+        return "winter", None, ["winter", "cozy"]
+
+    # North America: same as Europe for our MVP.
+    if region == "north_america":
+        if month in (6, 7, 8):
+            return "peak", None, ["summer", "peak season"]
+        if month in (3, 4, 5, 9, 10):
+            return "shoulder", None, ["shoulder season"]
+        return "winter", None, ["winter"]
+
+    # Oceania: INVERTED — Dec-Feb peak (summer), Jun-Aug winter.
+    if region == "oceania":
+        if month in (12, 1, 2):
+            return "peak", None, ["summer", "peak season"]
+        if month in (6, 7, 8):
+            return "winter", None, ["winter"]
+        return "shoulder", None, ["shoulder season"]
+
+    # Unknown region — Northern Hemisphere generic.
+    if month in (12, 1, 2):
+        return "winter", None, ["winter"]
+    if month in (3, 4, 5):
+        return "spring", None, ["spring"]
+    if month in (6, 7, 8):
+        return "summer", None, ["summer"]
+    return "autumn", None, ["autumn"]
+
+
+# ---------------------------------------------------------------------------
+# Festival overlap detection
+# ---------------------------------------------------------------------------
+
+
+def _date_in_window(
+    check: date, start_month: int, start_day: int, end_month: int, end_day: int
+) -> bool:
+    """Check if `check` falls in the window. Handles year-wrap (e.g. Dec 20 → Jan 5)."""
+    year = check.year
+    start = date(year, start_month, start_day)
+    if (end_month, end_day) >= (start_month, start_day):
+        end = date(year, end_month, end_day)
+    else:
+        # Year-wrap: end is in next calendar year relative to start
+        end = date(year + 1, end_month, end_day)
+        if check < start:
+            # Maybe we're in the tail end of last year's window
+            start_prev = date(year - 1, start_month, start_day)
+            end_prev = date(year, end_month, end_day)
+            return start_prev <= check <= end_prev
+    return start <= check <= end
+
+
+def _windows_overlap(
+    trip_start: date,
+    trip_end: date,
+    fest_start_m: int,
+    fest_start_d: int,
+    fest_end_m: int,
+    fest_end_d: int,
+) -> bool:
+    """Does any day of the trip fall inside the festival window?"""
+    # Sample both endpoints + a few midpoints to catch overlap cheaply.
+    delta = (trip_end - trip_start).days
+    samples = [trip_start + (trip_end - trip_start) * (i / max(delta, 1)) for i in range(delta + 1)]
+    for d in samples:
+        if isinstance(d, date) and _date_in_window(
+            d, fest_start_m, fest_start_d, fest_end_m, fest_end_d
+        ):
+            return True
+    return False
+
+
+def _find_active_festivals(
+    destination_lower: str, date_from: str | None, date_to: str | None
+) -> list[tuple[str, str]]:
+    """Return [(festival_name, crowd_impact), ...] for festivals overlapping the trip."""
+    if not date_from:
+        return []
+    try:
+        d_from = date.fromisoformat(date_from)
+        d_to = date.fromisoformat(date_to) if date_to else d_from
+    except ValueError:
+        return []
+
+    matches: list[tuple[str, str]] = []
+    for key, festivals in _FESTIVALS.items():
+        if key not in destination_lower:
+            continue
+        for sm, sd, em, ed, name, impact in festivals:
+            if _windows_overlap(d_from, d_to, sm, sd, em, ed):
+                matches.append((name, impact))
+    # Deduplicate (same festival name from overlapping keys).
+    seen: set[str] = set()
+    unique: list[tuple[str, str]] = []
+    for name, impact in matches:
+        if name not in seen:
+            seen.add(name)
+            unique.append((name, impact))
+    return unique
+
+
+# ---------------------------------------------------------------------------
+# Crowd level + warnings + query modifiers
+# ---------------------------------------------------------------------------
+
+
+def _crowd_level(season: str, festivals: list[tuple[str, str]]) -> str:
+    has_high = any(impact == "high" for _, impact in festivals)
+    if season == "peak" and has_high:
+        return "very_peak"
+    if season == "peak":
+        return "peak"
+    if has_high:
+        return "peak"
+    if season == "shoulder":
+        return "moderate"
+    if season in ("monsoon", "winter"):
+        return "low"
+    return "moderate"
+
+
+def _build_warnings(season: str, region: str, destination_lower: str, weather_hint: str | None) -> list[str]:
+    warnings: list[str] = []
+    if season == "monsoon" and region in ("india", "southeast_asia"):
+        warnings.append(
+            "Monsoon season — expect heavy rain, some attractions may be closed, "
+            "road conditions can be poor."
+        )
+    if weather_hint == "snow-pass-closures":
+        warnings.append("Heavy snow possible — high passes (e.g. Rohtang) may be closed.")
+    if weather_hint == "heatwave-risk":
+        warnings.append("Hot summer in the plains — plan outdoor activity for early morning or evening.")
+    if weather_hint == "monsoon-landslide-risk":
+        warnings.append("Monsoon in hill region — landslides and road closures possible.")
+    return warnings
+
+
+def _build_query_modifiers(
+    base: list[str],
+    season: str,
+    crowd_level: str,
+    festivals: list[tuple[str, str]],
+    vibes: list[str],
+) -> list[str]:
+    mods = list(base)  # season-derived modifiers passed in
+
+    if crowd_level == "very_peak":
+        mods.extend(["avoid crowds", "hidden gems", "off-the-beaten-path", "early morning"])
+    elif crowd_level == "peak":
+        mods.extend(["less crowded", "local favorites"])
+    elif crowd_level == "low" and season != "monsoon":
+        mods.append("off-season")
+
+    for name, _ in festivals:
+        mods.append(f"{name} celebrations")
+
+    vibes_lower = {v.lower() for v in vibes}
+    if "budget" in vibes_lower or "backpacking" in vibes_lower:
+        mods.append("cheap eats")
+    if "luxury" in vibes_lower:
+        mods.append("best reviewed")
+    if "foodie" in vibes_lower or "street food" in vibes_lower:
+        mods.append("local cuisine")
+    if "culture" in vibes_lower or "history" in vibes_lower:
+        mods.append("cultural landmarks")
+
+    # Mix in raw vibe terms (they're useful search words).
+    for v in vibes:
+        if v and v.lower() not in {q.lower() for q in mods}:
+            mods.append(v)
+
+    # Deduplicate while preserving order.
+    seen: set[str] = set()
+    out: list[str] = []
+    for m in mods:
+        if m.lower() not in seen:
+            seen.add(m.lower())
+            out.append(m)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Trip-shape lookups
 # ---------------------------------------------------------------------------
 
 _BUDGET_TIER = {
@@ -45,140 +523,47 @@ _PACE_DENSITY = {
     "Action-Packed": 5,
 }
 
-# Indian / SE Asian destinations where Jun–Sep means monsoon.
-_MONSOON_KEYWORDS = (
-    "india",
-    "goa",
-    "kerala",
-    "mumbai",
-    "bangalore",
-    "chennai",
-    "thailand",
-    "bangkok",
-    "phuket",
-    "vietnam",
-    "indonesia",
-    "bali",
-    "philippines",
-    "sri lanka",
-    "cambodia",
-    "laos",
-    "myanmar",
-)
 
-# Destinations that are peak-season in winter.
-_WINTER_PEAK_KEYWORDS = ("goa", "kerala", "rajasthan")
-
-# TODO: expand the lookup tables below.
-#  - Festivals: Holi (Mar, anywhere India), Onam (Aug/Sep, Kerala),
-#    Pushkar Camel Fair (Nov, Pushkar/Rajasthan), Chinese New Year (Jan/Feb, China/SG/HK),
-#    Songkran (Apr, Thailand), Oktoberfest (Sep/Oct, Munich), La Tomatina (Aug, Buñol),
-#    Carnival (Feb, Rio), Cherry Blossom (Mar/Apr, Japan).
-#  - Destination-specific seasons: Ladakh (snow Nov–Apr), European Alps,
-#    Patagonia (reverse seasons), Caribbean hurricane window (Jun–Nov), etc.
-#  - Crowd-level lookup per destination × month.
-#  - Weather hints: heatwave (Delhi May/Jun), typhoon (Philippines Jul–Oct),
-#    wildfire (California Jul–Oct).
-
-
-def _infer_season(month: int | None, destination_lower: str) -> tuple[str, str | None, list[str]]:
-    """Return (season, weather_hint, query_modifiers)."""
-    if month is None:
-        return "unknown", None, []
-
-    # Monsoon: June–September in India / SE Asia.
-    if month in (6, 7, 8, 9) and any(k in destination_lower for k in _MONSOON_KEYWORDS):
-        return "monsoon", "monsoon-flooding-risk", ["monsoon", "indoor activities", "waterfalls"]
-
-    # Winter: Dec–Feb (northern hemisphere assumption — TODO: flip for southern).
-    if month in (12, 1, 2):
-        weather_hint = None
-        modifiers = ["winter", "cozy"]
-        if "ladakh" in destination_lower:
-            weather_hint = "snow-pass-closures"
-            modifiers.append("snow")
-        return "winter", weather_hint, modifiers
-
-    # Spring: Mar–May.
-    if month in (3, 4, 5):
-        return "spring", None, ["spring"]
-
-    # Summer: Jun–Aug for non-monsoon destinations.
-    if month in (6, 7, 8):
-        return "summer", None, ["summer"]
-
-    # Autumn: Sep–Nov fallback.
-    return "autumn", None, ["autumn"]
-
-
-def _detect_festival(month: int | None, destination_lower: str) -> tuple[bool, str | None]:
-    """Detect festival windows. MVP: Diwali (Oct/Nov) in India.
-
-    TODO: expand to a full lookup table (festival_name × month × destination_keywords).
-    """
-    if month is None:
-        return False, None
-
-    # Diwali: late October / early November, primarily India / Jaipur / Delhi.
-    diwali_destinations = ("jaipur", "delhi", "varanasi", "udaipur", "rajasthan", "india")
-    if month in (10, 11) and any(k in destination_lower for k in diwali_destinations):
-        return True, "Diwali"
-
-    return False, None
-
-
-def _crowd_level(month: int | None, destination_lower: str) -> str:
-    if month is None:
-        return "moderate"
-    if month in (12, 1) and any(k in destination_lower for k in _WINTER_PEAK_KEYWORDS):
-        return "peak"
-    return "moderate"
-
-
-def _vibe_weights(vibes: list[str]) -> dict:
-    vibes_lower = {v.lower() for v in vibes}
-    if "hidden gems" in vibes_lower or "off the beaten path" in vibes_lower:
-        return {"reddit": 0.5, "youtube": 0.4, "blog": 0.1}
-    if "iconic" in vibes_lower or "first time" in vibes_lower:
-        return {"reddit": 0.2, "youtube": 0.3, "blog": 0.5}
-    return {"reddit": 0.34, "youtube": 0.33, "blog": 0.33}
+# ---------------------------------------------------------------------------
+# Public entry point
+# ---------------------------------------------------------------------------
 
 
 def extract_signals(trip_params: TripParams) -> TravelSignals:
     """Derive deterministic signals from trip parameters. No LLM."""
-    month: int | None = None
-    if trip_params.date_from:
-        try:
-            month = date.fromisoformat(trip_params.date_from).month
-        except ValueError:
-            month = None
-
     destination_lower = trip_params.destination.lower()
+    region = _detect_region(destination_lower)
+    month = _midpoint_month(trip_params.date_from, trip_params.date_to)
 
-    season, weather_hint, query_modifiers = _infer_season(month, destination_lower)
+    season, weather_hint, season_modifiers = _infer_season(month, region, destination_lower)
 
-    is_festival, festival_name = _detect_festival(month, destination_lower)
-    if is_festival and festival_name:
-        query_modifiers.append(festival_name)
+    festivals = _find_active_festivals(
+        destination_lower, trip_params.date_from, trip_params.date_to
+    )
+    is_festival_window = len(festivals) > 0
+    festival_name = festivals[0][0] if festivals else None
+    active_festival_names = [name for name, _ in festivals]
 
-    crowd_level = _crowd_level(month, destination_lower)
-    budget_tier = _BUDGET_TIER[trip_params.budget]
-    pace_density = _PACE_DENSITY[trip_params.pace]
+    crowd_level = _crowd_level(season, festivals)
+    budget_tier = _BUDGET_TIER.get(trip_params.budget, "mid")
+    pace_density = _PACE_DENSITY.get(trip_params.pace, 4)
     vibe_source_weights = _vibe_weights(trip_params.vibes)
-
-    # Mix in vibe keywords as query modifiers (cheap way to bias search).
-    for v in trip_params.vibes:
-        if v and v.lower() not in {q.lower() for q in query_modifiers}:
-            query_modifiers.append(v)
+    query_modifiers = _build_query_modifiers(
+        season_modifiers, season, crowd_level, festivals, trip_params.vibes
+    )
+    warnings = _build_warnings(season, region, destination_lower, weather_hint)
 
     return TravelSignals(
+        region=region,
         season=season,
-        is_festival_window=is_festival,
-        festival_name=festival_name,
-        crowd_level=crowd_level,
         weather_hint=weather_hint,
+        is_festival_window=is_festival_window,
+        festival_name=festival_name,
+        active_festivals=active_festival_names,
+        crowd_level=crowd_level,
         budget_tier=budget_tier,
         pace_density=pace_density,
         vibe_source_weights=vibe_source_weights,
         query_modifiers=query_modifiers,
+        warnings=warnings,
     )
