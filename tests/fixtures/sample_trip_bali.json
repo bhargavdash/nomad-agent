@@ -1,0 +1,14 @@
+{
+  "trip_id": "00000000-0000-0000-0000-000000000004",
+  "user_id": "00000000-0000-0000-0000-0000000000aa",
+  "destination": "Bali, Indonesia",
+  "date_from": "2026-09-10",
+  "date_to": "2026-09-17",
+  "duration_days": 7,
+  "travelers": "2",
+  "vibes": ["beaches", "nightlife", "foodie"],
+  "accommodation": "Boutique Villa",
+  "pace": "Balanced",
+  "budget": "$$",
+  "preferences": null
+}
