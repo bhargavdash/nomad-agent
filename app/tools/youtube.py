@@ -1,20 +1,22 @@
-"""YouTube Data API v3 tool — fetch authentic <60s Shorts for travel research.
+"""YouTube Data API v3 tool — fetch authentic short-form travel content.
 
-Why Shorts and not long-form vlogs?
-  Long-form travel YouTube is over-produced and sponsored. Shorts (<60s)
-  tend to capture authentic "I just walked into this place" moments.
-  Cross-Short aggregation (same place mentioned across 3+ creators) is
+Why short-form (≤5 min) and not long-form vlogs?
+  Long-form travel YouTube is over-produced and sponsored. Short-form
+  tends to capture authentic "I just walked into this place" moments.
+  Cross-creator aggregation (same place mentioned across 3+ Shorts) is
   a strong quality signal.
 
-Why not just trust the search API's videoDuration=short filter?
-  The "short" filter actually means <4 minutes, NOT the YouTube Shorts
-  format. We must fetch contentDetails.duration and re-filter to <60s
-  ourselves. That's the only reliable way to isolate Shorts.
+Duration policy:
+  We use the API's videoDuration=short filter (≤4 min per Google) but
+  also keep videos up to SHORTS_MAX_DURATION_SECONDS (default 300s) so
+  shorts-style 60–180s vlogs are not lost. The strict <60s filter was
+  removed: it threw away authentic POV vlogs that name specific places.
+  Items with 0/unknown duration are kept (some endpoints omit it).
 
 Quota:
   search.list = 100 units, videos.list = 1 unit per call.
-  Free tier = 10,000 units/day. One agent run ≈ 101 units (1 search + 25
-  video lookups batched into 1 videos.list call). Plenty of headroom.
+  Free tier = 10,000 units/day. One agent run with 5 fan-out queries ≈
+  505 units (5 × search + ~5 × videos.list). Still plenty of headroom.
 """
 
 from __future__ import annotations
@@ -32,7 +34,9 @@ logger = logging.getLogger(__name__)
 
 
 YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
-SHORTS_MAX_DURATION_SECONDS = 60
+# Soft upper bound for "short-form" content. We deliberately exceed the
+# strict <60s YouTube Shorts cutoff so authentic 1–5 min POV vlogs are kept.
+SHORTS_MAX_DURATION_SECONDS = 300
 DEFAULT_SEARCH_MAX_RESULTS = 25
 
 
@@ -49,12 +53,22 @@ class YouTubeShort:
     description: str
     duration_seconds: int
     view_count: int
+    like_count: int
     published_at: str  # ISO 8601
     tags: list[str]
+    transcript: str | None = None  # populated lazily by the agent, optional
 
     @property
     def url(self) -> str:
         return f"https://www.youtube.com/shorts/{self.video_id}"
+
+    @property
+    def like_view_ratio(self) -> float:
+        """Engagement proxy. >=0.01 (1%) is healthy on Shorts; viral mass-market
+        content often falls below 0.5%."""
+        if self.view_count <= 0:
+            return 0.0
+        return self.like_count / self.view_count
 
 
 # ---------------------------------------------------------------------------
@@ -139,13 +153,20 @@ def _items_to_shorts(items: list[dict[str, Any]]) -> list[YouTubeShort]:
         stats = item.get("statistics", {})
 
         duration_seconds = parse_iso8601_duration(content.get("duration", ""))
-        if duration_seconds == 0 or duration_seconds > SHORTS_MAX_DURATION_SECONDS:
-            continue  # not a Short
+        # Drop only items that exceed our short-form ceiling. Items with
+        # duration_seconds == 0 (parse failed / live / missing) are kept;
+        # the agent's quality filters and LLM stage will sort them out.
+        if duration_seconds > SHORTS_MAX_DURATION_SECONDS:
+            continue
 
         try:
             view_count = int(stats.get("viewCount", "0"))
         except (TypeError, ValueError):
             view_count = 0
+        try:
+            like_count = int(stats.get("likeCount", "0"))
+        except (TypeError, ValueError):
+            like_count = 0
 
         shorts.append(
             YouTubeShort(
@@ -155,6 +176,7 @@ def _items_to_shorts(items: list[dict[str, Any]]) -> list[YouTubeShort]:
                 description=snippet.get("description", ""),
                 duration_seconds=duration_seconds,
                 view_count=view_count,
+                like_count=like_count,
                 published_at=snippet.get("publishedAt", ""),
                 tags=snippet.get("tags", []) or [],
             )
@@ -201,9 +223,10 @@ async def search_youtube_shorts(
     items = await _fetch_video_details(video_ids, key)
     shorts = _items_to_shorts(items)
     logger.info(
-        "youtube.search filtered %d/%d items to actual Shorts (<60s)",
+        "youtube.search kept %d/%d short-form items (<=%ds)",
         len(shorts),
         len(items),
+        SHORTS_MAX_DURATION_SECONDS,
     )
     return shorts
 
@@ -213,12 +236,12 @@ async def search_youtube_shorts(
 # ---------------------------------------------------------------------------
 
 
-def fetch_transcript_safe(video_id: str) -> str | None:
+def fetch_transcript_safe(video_id: str, max_chars: int = 800) -> str | None:
     """Best-effort transcript fetch via youtube-transcript-api.
 
-    Returns concatenated text on success, None on any failure.
-    Most Shorts don't have manual captions and auto-captions can be poor —
-    this is intentionally non-blocking.
+    Sync function — call from async code via `await asyncio.to_thread(...)`.
+    Returns concatenated text (truncated to max_chars) on success, None on
+    any failure. Many Shorts have no captions; failure is the common case.
     """
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
@@ -226,9 +249,24 @@ def fetch_transcript_safe(video_id: str) -> str | None:
         return None
 
     try:
-        # API: get_transcript(video_id) → list of {"text": ..., "start": ..., "duration": ...}
-        chunks = YouTubeTranscriptApi.get_transcript(video_id, languages=["en"])
-        return " ".join(c.get("text", "") for c in chunks).strip() or None
+        # The library exposes get_transcript on older versions and
+        # YouTubeTranscriptApi().fetch on 1.x — try both.
+        text: str | None = None
+        if hasattr(YouTubeTranscriptApi, "get_transcript"):
+            chunks = YouTubeTranscriptApi.get_transcript(  # type: ignore[attr-defined]
+                video_id, languages=["en", "en-US", "en-GB"]
+            )
+            text = " ".join(c.get("text", "") for c in chunks).strip()
+        else:
+            api = YouTubeTranscriptApi()
+            fetched = api.fetch(video_id, languages=["en", "en-US", "en-GB"])
+            # FetchedTranscript has .snippets[*].text
+            text = " ".join(s.text for s in fetched.snippets).strip()  # type: ignore[attr-defined]
+        if not text:
+            return None
+        # Collapse whitespace + trim
+        text = " ".join(text.split())
+        return text[:max_chars] + ("…" if len(text) > max_chars else "")
     except Exception as e:  # noqa: BLE001
         logger.debug("transcript fetch failed for %s: %s", video_id, e)
         return None

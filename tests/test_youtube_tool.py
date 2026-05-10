@@ -3,7 +3,7 @@
 No real API calls — uses httpx.MockTransport to verify that:
   - We hit the correct endpoints with the correct params
   - ISO 8601 durations parse correctly
-  - The <60s filter actually drops 4-minute "shorts"
+  - The short-form ceiling (<=300s) drops only over-long videos
   - Empty / malformed responses don't crash
 """
 
@@ -62,9 +62,8 @@ def _build_mock_transport(search_payload: dict, videos_payload: dict) -> httpx.M
 
 
 @pytest.mark.asyncio
-async def test_search_youtube_shorts_filters_to_under_60s(monkeypatch) -> None:
-    """search.list returns 3 video ids; videos.list returns durations 45s, 70s, 200s.
-    Only the 45s one should survive the <60s filter."""
+async def test_search_youtube_shorts_keeps_short_form_drops_overlong(monkeypatch) -> None:
+    """45s and 200s should survive (short-form). 6-minute item should be dropped."""
 
     search_payload = {
         "items": [
@@ -79,30 +78,30 @@ async def test_search_youtube_shorts_filters_to_under_60s(monkeypatch) -> None:
                 "id": "abc",
                 "contentDetails": {"duration": "PT45S"},
                 "snippet": {
-                    "title": "Goa hidden beach 🏖️",
+                    "title": "Goa hidden beach",
                     "channelTitle": "TravelNomad",
                     "description": "This secret beach in north Goa is unreal!",
                     "publishedAt": "2025-12-15T00:00:00Z",
                     "tags": ["goa", "beach"],
                 },
-                "statistics": {"viewCount": "12000"},
+                "statistics": {"viewCount": "12000", "likeCount": "240"},
             },
             {
                 "id": "def",
-                "contentDetails": {"duration": "PT1M10S"},  # 70s — dropped
+                "contentDetails": {"duration": "PT3M20S"},  # 200s — kept (short-form)
                 "snippet": {
-                    "title": "Long-form vlog",
+                    "title": "POV cabo de rama",
                     "channelTitle": "Vlogger",
                     "description": "...",
                     "publishedAt": "2025-12-10T00:00:00Z",
                 },
-                "statistics": {"viewCount": "5000"},
+                "statistics": {"viewCount": "5000", "likeCount": "100"},
             },
             {
                 "id": "ghi",
-                "contentDetails": {"duration": "PT3M20S"},  # 200s — dropped
+                "contentDetails": {"duration": "PT6M00S"},  # 360s — dropped
                 "snippet": {
-                    "title": "Travel guide",
+                    "title": "Long travel guide",
                     "channelTitle": "Guide",
                     "description": "...",
                     "publishedAt": "2025-12-09T00:00:00Z",
@@ -114,7 +113,6 @@ async def test_search_youtube_shorts_filters_to_under_60s(monkeypatch) -> None:
 
     transport = _build_mock_transport(search_payload, videos_payload)
 
-    # Patch httpx.AsyncClient inside the youtube module to use our transport.
     import httpx as real_httpx
 
     real_async_client = real_httpx.AsyncClient
@@ -127,12 +125,14 @@ async def test_search_youtube_shorts_filters_to_under_60s(monkeypatch) -> None:
 
     result = await search_youtube_shorts("Goa shorts", max_results=10, api_key="fake-key")
 
-    assert len(result) == 1
-    assert isinstance(result[0], YouTubeShort)
-    assert result[0].video_id == "abc"
-    assert result[0].duration_seconds == 45
-    assert result[0].view_count == 12000
-    assert result[0].url == "https://www.youtube.com/shorts/abc"
+    ids = {s.video_id for s in result}
+    assert ids == {"abc", "def"}
+    abc = next(s for s in result if s.video_id == "abc")
+    assert isinstance(abc, YouTubeShort)
+    assert abc.duration_seconds == 45
+    assert abc.view_count == 12000
+    assert abc.like_count == 240
+    assert abc.url == "https://www.youtube.com/shorts/abc"
 
 
 @pytest.mark.asyncio

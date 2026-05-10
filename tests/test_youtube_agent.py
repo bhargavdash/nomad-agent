@@ -11,12 +11,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.agents.youtube_shorts import (
+    _ExtractedDiscovery,
+    _ExtractionResult,
+    _build_queries,
     _build_query,
     _filter_quality,
+    _is_listicle,
+    _passes_engagement,
     _to_research_discoveries,
+    _validate_and_dedupe,
     run_youtube_agent,
 )
-from app.agents.youtube_shorts import _ExtractedDiscovery, _ExtractionResult
 from app.schemas import TripParams
 from app.signals import extract_signals
 from app.tools.youtube import YouTubeShort
@@ -41,61 +46,160 @@ def _trip(**overrides) -> TripParams:
     return TripParams(**base)
 
 
-def _short(video_id: str, channel: str, view_count: int, duration: int = 45) -> YouTubeShort:
+def _short(
+    video_id: str,
+    channel: str,
+    view_count: int,
+    *,
+    title: str | None = None,
+    duration: int = 90,
+    like_count: int | None = None,
+) -> YouTubeShort:
+    if like_count is None:
+        # Default to a healthy 1% like:view ratio so engagement filter passes.
+        like_count = max(view_count // 100, 1)
     return YouTubeShort(
         video_id=video_id,
-        title=f"Cool {video_id} content",
+        title=title or f"Cool {video_id} content",
         channel_title=channel,
         description="Some description here",
         duration_seconds=duration,
         view_count=view_count,
+        like_count=like_count,
         published_at="2025-12-15T00:00:00Z",
         tags=["travel"],
     )
 
 
+def _disc(
+    place_name: str = "Anjuna Flea Market",
+    *,
+    why: str = "The Wednesday flea market at Anjuna with bargaining and live music.",
+    evidence: list[int] | None = None,
+    confidence: str = "high",
+    tags: list[str] | None = None,
+) -> _ExtractedDiscovery:
+    return _ExtractedDiscovery(
+        place_name=place_name,
+        why_specific=why,
+        evidence_short_indices=evidence if evidence is not None else [1, 2],
+        tags=tags or ["market", "anjuna"],
+        confidence=confidence,  # type: ignore[arg-type]
+    )
+
+
 # ---------------------------------------------------------------------------
-# Query builder
+# Query builder — Layer 1b
 # ---------------------------------------------------------------------------
 
 
-def test_build_query_includes_destination_and_signal_modifiers() -> None:
+def test_build_queries_returns_destination_agnostic_queries() -> None:
     trip = _trip()
     signals = extract_signals(trip)
-    query = _build_query(trip, signals)
+    queries = _build_queries(trip, signals)
 
-    assert "Goa, India" in query
-    assert "travel shorts" in query
+    # Always present axes.
+    assert any("travel vlog" in q for q in queries)
+    assert any("food" in q for q in queries)
+    assert any("hidden places" in q for q in queries)
+    # Each query must reference the destination.
+    assert all("Goa, India" in q for q in queries)
+    # Capped at 5.
+    assert 3 <= len(queries) <= 5
 
 
-def test_build_query_skips_search_unfriendly_modifiers() -> None:
-    """Modifiers like 'avoid crowds' are noise inside YouTube queries — should be skipped."""
+def test_build_queries_uses_first_vibe_when_present() -> None:
+    trip = _trip(vibes=["nightlife", "beaches"])
+    signals = extract_signals(trip)
+    queries = _build_queries(trip, signals)
+    assert any(q.endswith("nightlife") for q in queries)
+
+
+def test_build_queries_falls_back_when_no_vibes() -> None:
+    trip = _trip(vibes=[])
+    signals = extract_signals(trip)
+    queries = _build_queries(trip, signals)
+    # Should include the generic discovery prompt or hidden places.
+    assert any("things to do in" in q or "hidden places" in q for q in queries)
+
+
+def test_build_queries_includes_season_only_when_informative() -> None:
+    # Goa in late June → monsoon, season should appear.
+    trip = _trip(date_from="2026-06-15", date_to="2026-06-22")
+    signals = extract_signals(trip)
+    queries = _build_queries(trip, signals)
+    assert any("monsoon" in q for q in queries)
+
+
+def test_build_queries_works_for_any_destination() -> None:
+    """No Goa-specific hardcoding — must work worldwide."""
+    trip = _trip(destination="Reykjavik, Iceland", vibes=["northern lights"])
+    signals = extract_signals(trip)
+    queries = _build_queries(trip, signals)
+    assert all("Reykjavik, Iceland" in q for q in queries)
+    assert any("northern lights" in q for q in queries)
+
+
+def test_build_query_back_compat_returns_first_query() -> None:
     trip = _trip()
     signals = extract_signals(trip)
-    query = _build_query(trip, signals)
-
-    # These exact phrases should NOT make it into the query string
-    assert "avoid crowds" not in query
-    assert "off-the-beaten-path" not in query
+    assert _build_query(trip, signals) == _build_queries(trip, signals)[0]
 
 
 # ---------------------------------------------------------------------------
-# Quality filter
+# Listicle / clickbait filter — Layer 1d
 # ---------------------------------------------------------------------------
 
 
-def test_filter_quality_drops_low_view_count_items() -> None:
+def test_listicle_filter_drops_top_n_titles() -> None:
+    assert _is_listicle("Top 10 Places to Visit in Goa")
+    assert _is_listicle("Best 5 beaches in Goa")
+    assert _is_listicle("Goa Tourist Places You MUST Visit")
+    assert _is_listicle("5 things to do in Goa")
+
+
+def test_listicle_filter_keeps_authentic_titles() -> None:
+    assert not _is_listicle("Eating crab at Martin's Corner Goa")
+    assert not _is_listicle("Cabo de Rama fort in monsoon")
+    assert not _is_listicle("Sunday brunch at Bomras")
+
+
+# ---------------------------------------------------------------------------
+# Engagement filter — Layer 1e
+# ---------------------------------------------------------------------------
+
+
+def test_engagement_filter_drops_below_view_floor() -> None:
+    assert not _passes_engagement(_short("a", "C", view_count=100))
+
+
+def test_engagement_filter_drops_low_like_ratio() -> None:
+    # 1000 views, 1 like → 0.1% ratio (well under 0.3% floor).
+    s = _short("a", "C", view_count=1000, like_count=1)
+    assert not _passes_engagement(s)
+
+
+def test_engagement_filter_keeps_hidden_likes() -> None:
+    """Some videos hide likes (like_count = 0). Don't penalize those."""
+    s = _short("a", "C", view_count=10000, like_count=0)
+    assert _passes_engagement(s)
+
+
+# ---------------------------------------------------------------------------
+# Quality filter (composes listicle + engagement + per-channel-best)
+# ---------------------------------------------------------------------------
+
+
+def test_filter_quality_drops_listicle_titles() -> None:
     shorts = [
-        _short("a", "ChannelA", view_count=10),  # below threshold
-        _short("b", "ChannelB", view_count=10000),
+        _short("a", "C1", view_count=10000, title="Top 10 Places in Goa"),
+        _short("b", "C2", view_count=10000, title="Crab xacuti at Martin's Corner"),
     ]
     result = _filter_quality(shorts)
-    assert len(result) == 1
-    assert result[0].video_id == "b"
+    assert {s.video_id for s in result} == {"b"}
 
 
 def test_filter_quality_dedupes_by_channel_keeps_best() -> None:
-    """Same channel posting multiple Shorts → keep only the highest-view one."""
     shorts = [
         _short("a", "TravelGuru", view_count=5000),
         _short("b", "TravelGuru", view_count=20000),  # winner
@@ -110,39 +214,82 @@ def test_filter_quality_dedupes_by_channel_keeps_best() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Mapping LLM output → ResearchDiscovery
+# Validate + dedupe — Layer 2a / 2d / 2e
 # ---------------------------------------------------------------------------
 
 
-def test_to_research_discoveries_tags_source_youtube() -> None:
+def test_validate_drops_generic_title() -> None:
+    extracted = [
+        _disc(place_name="North Goa"),  # generic
+        _disc(place_name="Cabo de Rama Fort"),
+    ]
+    survivors = _validate_and_dedupe(extracted, n_videos=5)
+    assert [d.place_name for d in survivors] == ["Cabo de Rama Fort"]
+
+
+def test_validate_drops_vague_body() -> None:
+    extracted = [
+        _disc(
+            place_name="Some Real Beach",
+            why="It has stunning beaches and vibrant culture.",
+        ),
+        _disc(
+            place_name="Bar do Mineiro",
+            why="A small bar in old quarter known for pão de queijo and cachaça.",
+        ),
+    ]
+    survivors = _validate_and_dedupe(extracted, n_videos=5)
+    assert [d.place_name for d in survivors] == ["Bar do Mineiro"]
+
+
+def test_validate_drops_no_evidence() -> None:
+    """Schema requires min_length=1, but indices outside range count as no-evidence."""
+    extracted = [
+        _disc(place_name="Phantom Spot", evidence=[99]),  # out of range for n_videos=5
+        _disc(place_name="Real Spot", evidence=[1, 2]),
+    ]
+    survivors = _validate_and_dedupe(extracted, n_videos=5)
+    assert [d.place_name for d in survivors] == ["Real Spot"]
+
+
+def test_validate_dedupes_by_place_name() -> None:
+    extracted = [
+        _disc(place_name="Cabo de Rama Fort", evidence=[1], confidence="medium"),
+        _disc(place_name="cabo de rama fort", evidence=[1, 2, 4], confidence="high"),
+    ]
+    survivors = _validate_and_dedupe(extracted, n_videos=5)
+    assert len(survivors) == 1
+    # The richer (more evidence, higher confidence) entry should win.
+    assert survivors[0].confidence == "high"
+    assert len(survivors[0].evidence_short_indices) == 3
+
+
+# ---------------------------------------------------------------------------
+# Mapping → ResearchDiscovery
+# ---------------------------------------------------------------------------
+
+
+def test_to_research_discoveries_combines_fields() -> None:
     extracted = [
         _ExtractedDiscovery(
-            title="Sunset at Vagator",
-            body="Vagator beach at sunset is mentioned across 3 different Shorts. Quiet rocks.",
-            tags=["beach", "sunset", "north-goa"],
-            confidence="high",
-        ),
+            place_name="Butter Café, Assagao",
+            why_specific="Specialty café in north Goa villages, known for cinnamon rolls.",
+            best_time="before 10am",
+            practical_tip="₹250–400 per item",
+            evidence_short_indices=[3, 7],
+            tags=["cafe", "assagao", "breakfast"],
+            confidence="medium",
+        )
     ]
     result = _to_research_discoveries(extracted)
     assert len(result) == 1
-    assert result[0].source == "youtube"
-    assert result[0].title == "Sunset at Vagator"
-    assert result[0].tags == ["beach", "sunset", "north-goa"]
-    assert result[0].id  # uuid assigned
-
-
-def test_to_research_discoveries_trims_excess_tags() -> None:
-    """ResearchDiscovery schema allows max 3 tags — must trim defensively."""
-    extracted = [
-        _ExtractedDiscovery(
-            title="X",
-            body="A discovery body that meets the 20 char minimum requirement.",
-            tags=["a", "b", "c"],  # already valid (max 3 in source schema)
-            confidence="high",
-        ),
-    ]
-    result = _to_research_discoveries(extracted)
-    assert len(result[0].tags) == 3
+    d = result[0]
+    assert d.source == "youtube"
+    assert d.title == "Butter Café, Assagao"
+    assert "before 10am" in d.body
+    assert "₹250" in d.body
+    assert d.tags == ["cafe", "assagao", "breakfast"]
+    assert d.id
 
 
 # ---------------------------------------------------------------------------
@@ -155,9 +302,15 @@ async def test_run_youtube_agent_returns_empty_when_search_returns_nothing() -> 
     trip = _trip()
     signals = extract_signals(trip)
 
-    with patch(
-        "app.agents.youtube_shorts.search_youtube_shorts",
-        AsyncMock(return_value=[]),
+    with (
+        patch(
+            "app.agents.youtube_shorts.search_youtube_shorts",
+            AsyncMock(return_value=[]),
+        ),
+        patch(
+            "app.agents.youtube_shorts.fetch_transcript_safe",
+            return_value=None,
+        ),
     ):
         result = await run_youtube_agent(trip, signals)
 
@@ -166,7 +319,6 @@ async def test_run_youtube_agent_returns_empty_when_search_returns_nothing() -> 
 
 @pytest.mark.asyncio
 async def test_run_youtube_agent_returns_empty_when_api_key_missing() -> None:
-    """Tool raises RuntimeError when YOUTUBE_API_KEY missing — agent must catch and return []."""
     trip = _trip()
     signals = extract_signals(trip)
 
@@ -176,15 +328,14 @@ async def test_run_youtube_agent_returns_empty_when_api_key_missing() -> None:
     ):
         result = await run_youtube_agent(trip, signals)
 
+    # All fan-out queries fail with RuntimeError → no shorts → []
     assert result == []
 
 
 @pytest.mark.asyncio
 async def test_run_youtube_agent_happy_path_with_mocks() -> None:
-    """End-to-end with both the tool and the LLM mocked.
-
-    Verifies the agent threads search → filter → LLM → ResearchDiscovery correctly.
-    """
+    """End-to-end: search returns shorts, _extract_via_llm produces discoveries,
+    and the run loop wires them through validation → ResearchDiscovery."""
     trip = _trip()
     signals = extract_signals(trip)
 
@@ -193,35 +344,46 @@ async def test_run_youtube_agent_happy_path_with_mocks() -> None:
         _short("b", "ChannelB", view_count=20000),
         _short("c", "ChannelC", view_count=5000),
     ]
-    fake_llm_output = _ExtractionResult(
-        discoveries=[
-            _ExtractedDiscovery(
-                title="Anjuna Flea Market",
-                body="The Wednesday flea market at Anjuna shows up across 4 different Shorts. "
-                     "Bargaining is expected; arrive before noon for the best stalls.",
-                tags=["market", "anjuna", "shopping"],
-                confidence="high",
+    extracted = [
+        _ExtractedDiscovery(
+            place_name="Anjuna Flea Market",
+            why_specific=(
+                "Wednesday flea market at Anjuna with bargaining and live music. "
+                "Arrive before noon for best stalls."
             ),
-            _ExtractedDiscovery(
-                title="Sunset at Vagator",
-                body="Mentioned across 3 creators as the spot for sunsets. Get there 45 min early.",
-                tags=["sunset", "beach"],
-                confidence="high",
+            best_time="before noon",
+            practical_tip=None,
+            evidence_short_indices=[1, 2],
+            tags=["market", "anjuna", "shopping"],
+            confidence="high",
+        ),
+        _ExtractedDiscovery(
+            place_name="Cabo de Rama Fort",
+            why_specific=(
+                "Clifftop ruins on the south coast, quieter alternative "
+                "to Chapora. Free entry."
             ),
-        ]
-    )
-
-    fake_llm = MagicMock()
-    fake_structured = MagicMock()
-    fake_structured.ainvoke = AsyncMock(return_value=fake_llm_output)
-    fake_llm.with_structured_output.return_value = fake_structured
+            best_time="sunset",
+            practical_tip="Free entry",
+            evidence_short_indices=[3],
+            tags=["fort", "south-goa", "viewpoint"],
+            confidence="medium",
+        ),
+    ]
 
     with (
         patch(
             "app.agents.youtube_shorts.search_youtube_shorts",
             AsyncMock(return_value=fake_shorts),
         ),
-        patch("app.agents.youtube_shorts.get_llm", return_value=fake_llm),
+        patch(
+            "app.agents.youtube_shorts._extract_via_llm",
+            AsyncMock(return_value=extracted),
+        ),
+        patch(
+            "app.agents.youtube_shorts.fetch_transcript_safe",
+            return_value=None,
+        ),
     ):
         result = await run_youtube_agent(trip, signals)
 
@@ -229,29 +391,176 @@ async def test_run_youtube_agent_happy_path_with_mocks() -> None:
     assert all(d.source == "youtube" for d in result)
     titles = {d.title for d in result}
     assert "Anjuna Flea Market" in titles
-    assert "Sunset at Vagator" in titles
+    assert "Cabo de Rama Fort" in titles
 
 
 @pytest.mark.asyncio
-async def test_run_youtube_agent_swallows_unexpected_errors() -> None:
-    """If the LLM call blows up unexpectedly, the agent must NOT crash the pipeline."""
+async def test_run_youtube_agent_drops_vague_llm_output() -> None:
+    """Even if the LLM emits generic content, the validator must drop it."""
     trip = _trip()
     signals = extract_signals(trip)
 
     fake_shorts = [_short("a", "ChannelA", view_count=10000)]
-
-    fake_llm = MagicMock()
-    fake_structured = MagicMock()
-    fake_structured.ainvoke = AsyncMock(side_effect=Exception("LLM blew up"))
-    fake_llm.with_structured_output.return_value = fake_structured
+    extracted = [
+        _ExtractedDiscovery(
+            place_name="North Goa",  # generic title — must be dropped
+            why_specific="North Goa has stunning beaches and vibrant nightlife.",
+            evidence_short_indices=[1],
+            tags=["north-goa", "beach"],
+            confidence="high",
+        ),
+    ]
 
     with (
         patch(
             "app.agents.youtube_shorts.search_youtube_shorts",
             AsyncMock(return_value=fake_shorts),
         ),
-        patch("app.agents.youtube_shorts.get_llm", return_value=fake_llm),
+        patch(
+            "app.agents.youtube_shorts._extract_via_llm",
+            AsyncMock(return_value=extracted),
+        ),
+        patch(
+            "app.agents.youtube_shorts.fetch_transcript_safe",
+            return_value=None,
+        ),
     ):
         result = await run_youtube_agent(trip, signals)
 
     assert result == []
+
+
+@pytest.mark.asyncio
+async def test_run_youtube_agent_swallows_unexpected_errors() -> None:
+    trip = _trip()
+    signals = extract_signals(trip)
+
+    fake_shorts = [_short("a", "ChannelA", view_count=10000)]
+
+    with (
+        patch(
+            "app.agents.youtube_shorts.search_youtube_shorts",
+            AsyncMock(return_value=fake_shorts),
+        ),
+        patch(
+            "app.agents.youtube_shorts._extract_via_llm",
+            AsyncMock(side_effect=Exception("LLM blew up")),
+        ),
+        patch(
+            "app.agents.youtube_shorts.fetch_transcript_safe",
+            return_value=None,
+        ),
+    ):
+        result = await run_youtube_agent(trip, signals)
+
+    assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Layer 3 — clustering helpers (pure, no LLM)
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_place_key_collapses_punctuation_and_case() -> None:
+    from app.agents.youtube_shorts import _normalize_place_key
+
+    assert _normalize_place_key("Anjuna Flea Market") == "anjuna flea market"
+    assert (
+        _normalize_place_key("Anjuna  Flea  Market!")
+        == _normalize_place_key("anjuna flea market")
+    )
+
+
+def test_cluster_mentions_groups_by_normalized_name() -> None:
+    from app.agents.youtube_shorts import _PlaceMention, _cluster_mentions
+
+    mentions = [
+        _PlaceMention(
+            video_index=1,
+            place_name="Dudhsagar Falls",
+            quote="Dudhsagar in monsoon",
+            category="waterfall",
+        ),
+        _PlaceMention(
+            video_index=4,
+            place_name="dudhsagar falls",
+            quote="Trip to Dudhsagar",
+            category="waterfall",
+        ),
+        _PlaceMention(
+            video_index=7,
+            place_name="DUDHSAGAR FALLS!",
+            quote="Iconic falls",
+            category="waterfall",
+        ),
+        _PlaceMention(
+            video_index=2,
+            place_name="Anjuna Beach",
+            quote="Anjuna parties",
+            category="beach",
+        ),
+    ]
+    clusters = _cluster_mentions(mentions, n_videos=10)
+    assert len(clusters) == 2
+    # Top cluster should be Dudhsagar (3 distinct videos).
+    top_name, top_ms = clusters[0]
+    assert top_name.lower().startswith("dudhsagar")
+    assert {m.video_index for m in top_ms} == {1, 4, 7}
+
+
+def test_cluster_mentions_drops_destination_clusters() -> None:
+    """For trip to 'Rajasthan, India', a cluster named 'Rajasthan' or 'India'
+    is too coarse and must be dropped. Sub-places like 'Hawa Mahal' survive."""
+    from app.agents.youtube_shorts import _PlaceMention, _cluster_mentions
+
+    mentions = [
+        _PlaceMention(
+            video_index=1, place_name="Rajasthan", quote="Rajasthan trip",
+            category="region",
+        ),
+        _PlaceMention(
+            video_index=2, place_name="India", quote="India travel",
+            category="country",
+        ),
+        _PlaceMention(
+            video_index=3, place_name="Hawa Mahal", quote="Hawa Mahal Jaipur",
+            category="palace",
+        ),
+        _PlaceMention(
+            video_index=4, place_name="Hawa Mahal", quote="iconic facade",
+            category="palace",
+        ),
+    ]
+    clusters = _cluster_mentions(
+        mentions, n_videos=10, destination="Rajasthan, India"
+    )
+    assert len(clusters) == 1
+    assert clusters[0][0] == "Hawa Mahal"
+
+
+def test_cluster_mentions_drops_generic_and_invalid_indices() -> None:
+    from app.agents.youtube_shorts import _PlaceMention, _cluster_mentions
+
+    mentions = [
+        _PlaceMention(
+            video_index=1,
+            place_name="North Goa",  # generic — dropped
+            quote="north goa vibe",
+            category="neighborhood",
+        ),
+        _PlaceMention(
+            video_index=99,  # out of range — dropped
+            place_name="Cabo de Rama Fort",
+            quote="clifftop",
+            category="fort",
+        ),
+        _PlaceMention(
+            video_index=2,
+            place_name="Cabo de Rama Fort",
+            quote="south coast",
+            category="fort",
+        ),
+    ]
+    clusters = _cluster_mentions(mentions, n_videos=5)
+    assert len(clusters) == 1
+    assert clusters[0][0] == "Cabo de Rama Fort"
