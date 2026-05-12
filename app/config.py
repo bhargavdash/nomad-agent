@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     TOGETHER_API_KEY: str = ""
+    CEREBRAS_API_KEY: str = ""
 
     # Optional: observability
     LANGSMITH_API_KEY: str = ""

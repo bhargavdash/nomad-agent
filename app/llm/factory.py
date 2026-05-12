@@ -92,7 +92,20 @@ def get_llm(role: str) -> BaseChatModel:
             base_url="https://api.moonshot.cn/v1",
         )
 
+    if provider == "cerebras":
+        from langchain_openai import ChatOpenAI
+
+        if not settings.CEREBRAS_API_KEY:
+            raise RuntimeError(
+                "CEREBRAS_API_KEY is not set but provider 'cerebras' was requested."
+            )
+        return ChatOpenAI(
+            model=model,
+            api_key=settings.CEREBRAS_API_KEY,
+            base_url="https://api.cerebras.ai/v1",
+        )
+
     raise ValueError(
         f"Unknown LLM provider: {provider!r}. "
-        "Expected one of: groq, openai, anthropic, google, together, kimi."
+        "Expected one of: groq, openai, anthropic, google, together, kimi, cerebras."
     )
