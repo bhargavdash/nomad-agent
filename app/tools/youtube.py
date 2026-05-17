@@ -37,6 +37,12 @@ YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
 # Soft upper bound for "short-form" content. We deliberately exceed the
 # strict <60s YouTube Shorts cutoff so authentic 1–5 min POV vlogs are kept.
 SHORTS_MAX_DURATION_SECONDS = 300
+# Long-form vlog window. Below 240s overlaps with Shorts agent's beat; above
+# 1500s skews into documentary / sponsored / full-trip-recap territory that
+# the Shorts-side comments call "over-produced and sponsored". 4-25 min is
+# the sweet spot for authentic creator vlogs with mandatory captions.
+LONGFORM_MIN_DURATION_SECONDS = 240
+LONGFORM_MAX_DURATION_SECONDS = 1500
 DEFAULT_SEARCH_MAX_RESULTS = 25
 
 
@@ -229,6 +235,117 @@ async def search_youtube_shorts(
         SHORTS_MAX_DURATION_SECONDS,
     )
     return shorts
+
+
+# ---------------------------------------------------------------------------
+# Long-form variant (4-25 min creator vlogs). Same dataclass shape as Shorts —
+# only the search filter (`videoDuration=medium`) and the post-filter window
+# differ. Reused by the long-form agent; not used by the Shorts agent.
+# ---------------------------------------------------------------------------
+
+
+async def _search_medium_videos(
+    query: str, max_results: int, api_key: str
+) -> list[str]:
+    """search.list with videoDuration=medium (4-20 min by YouTube definition)."""
+    params = {
+        "part": "id",
+        "q": query,
+        "type": "video",
+        "videoDuration": "medium",
+        "maxResults": min(max_results, 50),
+        "order": "relevance",
+        "safeSearch": "moderate",
+        "key": api_key,
+    }
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(f"{YOUTUBE_API_BASE}/search", params=params)
+        resp.raise_for_status()
+        data = resp.json()
+    return [
+        item["id"]["videoId"]
+        for item in data.get("items", [])
+        if item.get("id", {}).get("videoId")
+    ]
+
+
+def _items_to_longform(items: list[dict[str, Any]]) -> list[YouTubeShort]:
+    """Map raw API items → YouTubeShort dataclasses, filtered to long-form window.
+
+    Reuses YouTubeShort so the downstream extraction pipeline (transcript fetch,
+    Pass-1/2 LLM, clustering) doesn't need a parallel data type. The
+    `duration_seconds` field tells the agent which window the video came from.
+    """
+    out: list[YouTubeShort] = []
+    for item in items:
+        content = item.get("contentDetails", {})
+        snippet = item.get("snippet", {})
+        stats = item.get("statistics", {})
+        duration_seconds = parse_iso8601_duration(content.get("duration", ""))
+        # Drop items outside the long-form window. Unknown duration (0) gets
+        # dropped here too — unlike Shorts, long-form needs reliable duration
+        # because we're tuning transcript fetch + engagement thresholds to it.
+        if duration_seconds < LONGFORM_MIN_DURATION_SECONDS:
+            continue
+        if duration_seconds > LONGFORM_MAX_DURATION_SECONDS:
+            continue
+        try:
+            view_count = int(stats.get("viewCount", "0"))
+        except (TypeError, ValueError):
+            view_count = 0
+        try:
+            like_count = int(stats.get("likeCount", "0"))
+        except (TypeError, ValueError):
+            like_count = 0
+        out.append(
+            YouTubeShort(
+                video_id=item.get("id", ""),
+                title=snippet.get("title", ""),
+                channel_title=snippet.get("channelTitle", ""),
+                description=snippet.get("description", ""),
+                duration_seconds=duration_seconds,
+                view_count=view_count,
+                like_count=like_count,
+                published_at=snippet.get("publishedAt", ""),
+                tags=snippet.get("tags", []) or [],
+            )
+        )
+    return out
+
+
+async def search_youtube_longform(
+    query: str,
+    max_results: int = DEFAULT_SEARCH_MAX_RESULTS,
+    api_key: str | None = None,
+) -> list[YouTubeShort]:
+    """Search for long-form creator vlogs (4-25 min) matching the query.
+
+    Unlike `search_youtube_shorts`, transcripts are typically present and
+    are a hard requirement at the agent layer (long-form without captions
+    is unusable — there's no way to extract place mentions cheaply).
+
+    Returns YouTubeShort dataclasses for downstream pipeline reuse.
+    """
+    key = api_key or settings.YOUTUBE_API_KEY
+    if not key:
+        raise RuntimeError(
+            "YOUTUBE_API_KEY is not set — cannot run YouTube long-form search."
+        )
+    logger.info("youtube.longform.search query=%r max=%d", query, max_results)
+    video_ids = await _search_medium_videos(query, max_results, key)
+    if not video_ids:
+        logger.info("youtube.longform.search returned 0 video ids")
+        return []
+    items = await _fetch_video_details(video_ids, key)
+    longform = _items_to_longform(items)
+    logger.info(
+        "youtube.longform.search kept %d/%d items (in [%d,%d]s)",
+        len(longform),
+        len(items),
+        LONGFORM_MIN_DURATION_SECONDS,
+        LONGFORM_MAX_DURATION_SECONDS,
+    )
+    return longform
 
 
 # ---------------------------------------------------------------------------

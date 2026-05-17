@@ -417,29 +417,32 @@ OUTPUT: JSON {"mentions": [...]}. Empty list is fine."""
 
 _PASS2_SYSTEM = """You write final travel-research discoveries from clustered place-mention evidence.
 
-You receive a list of CLUSTERS. Each cluster is one place_name with the quotes from the videos that mentioned it. Your job: pick the strongest clusters and write one discovery per place.
+You receive a list of CLUSTERS. Each cluster is one place_name with the quotes from the videos that mentioned it. Your job: turn as many clusters as possible into useful discoveries by quoting concrete visual / situational detail from the evidence.
 
-Strict rules:
+AIM FOR 5-8 returned. A cluster with even 1 video that names a specific place AND contains one concrete clause in its quote (a visual detail, a dish, a time of day, a season, an activity) IS valid evidence — emit it with confidence="low". Returning only 1-2 from 10+ clusters means you were too strict; re-read the quotes and pull out the visual / sensory hook.
+
+Rules:
 - ONLY use clusters provided. Do NOT introduce new places.
 - DROP clusters that name a whole city, state, or country when the trip destination is
   a wider region. Example: for "Rajasthan, India", drop "Jaipur", "Jodhpur", "Udaipur",
-  "Rajasthan" as discoveries on their own — they are too coarse to be actionable. Keep
-  only sub-city specifics: forts, palaces, markets, dishes, neighborhoods, festivals.
-  Same logic for "Goa, India" — drop "north Goa", "south Goa", "Goa".
-- `why_specific` MUST add at least ONE concrete clause beyond the place name (which
-  neighborhood, what dish, when it's busy, who goes, what to order, what makes it different).
+  "Rajasthan" as discoveries on their own — too coarse. Keep sub-city specifics: forts,
+  palaces, markets, dishes, neighborhoods, festivals.
+- `why_specific` MUST add at least ONE concrete clause beyond the place name. Prefer
+  VISUAL HOOKS from the quotes: cliff-edge, lit at dusk, marble jali, thatched roof,
+  infinity pool, spice-market alley, neon strip, jungle ravine, candy-coloured houses.
+  Other valid clauses: which dish, which neighborhood, when it's busy, what to order,
+  what makes it different.
 - BANNED words in `why_specific`: stunning, vibrant, breathtaking, scenic, picturesque,
-  paradise-like, must-visit, natural beauty, rich culture, something for everyone, beautiful
-  landscape, beautiful architecture, beautiful view.
+  paradise-like, must-visit, natural beauty, rich culture, something for everyone,
+  beautiful landscape, beautiful architecture, beautiful view. Replace with the concrete
+  detail (don't say "stunning views" — say "the cliff drops 200ft into the Arabian Sea").
 - `evidence_short_indices` MUST be the union of video_index values from the cluster's
   quotes. Do not invent indices.
 - Tautologies like "Popular beach in Goa" or "Famous fort in Rajasthan" are FORBIDDEN.
-  If the cluster's quotes don't support a concrete clause, drop it.
+  If the cluster's quotes only support a tautology, drop it.
 - `confidence`: "high" if 3+ distinct video mentions, "medium" if 2, "low" if 1.
-  Single-mention places need a concrete detail in the quote to qualify. Otherwise drop.
-- Quality > quantity. Returning 2 strong discoveries from 14 weak clusters is correct.
 
-GOOD example:
+GOOD example (multi-video):
 {
   "place_name": "Dudhsagar Falls",
   "why_specific": "Four-tier waterfall on the Goa-Karnataka border; reachable only by 4x4 jeep safari from Mollem during monsoon when the falls are at full flow.",
@@ -450,14 +453,25 @@ GOOD example:
   "confidence": "high"
 }
 
-BAD example (DO NOT EMIT):
+GOOD example (single-video with concrete visual hook — emit at confidence "low"):
+{
+  "place_name": "Cabo de Rama Fort",
+  "why_specific": "Crumbling 16th-century Portuguese fort on a cliff in south Goa with a near-empty beach 200ft below; the laterite walls glow orange at sunset.",
+  "best_time": "late afternoon for sunset",
+  "practical_tip": null,
+  "evidence_short_indices": [9],
+  "tags": ["fort", "sunset", "south-goa"],
+  "confidence": "low"
+}
+
+BAD example (DO NOT EMIT — tautology with no concrete clause):
 {
   "place_name": "Baga Beach",
   "why_specific": "Popular beach in Goa with a lively atmosphere",
   "evidence_short_indices": [2]
 }
 
-OUTPUT: JSON {"discoveries": [...]}. Up to 8. Empty list is acceptable."""
+OUTPUT: JSON {"discoveries": [...]}. Target 5-8. Empty list is acceptable only if every cluster is a tautology with no concrete detail."""
 
 
 def _format_videos_for_pass1(shorts: list[YouTubeShort], offset: int) -> str:
@@ -642,24 +656,76 @@ def _cluster_mentions(
     return clusters[:MAX_CLUSTERS_FOR_PASS2]
 
 
+# Visual / scene-descriptor patterns. Used to surface vivid phrases from the
+# Pass-1 quotes for the Pass-2 prompt — concrete hooks beat generic adjectives.
+# Conservative on purpose: matches noun phrases that imply a specific scene,
+# not vague adjectives ("beautiful", "amazing" — those go through BANNED filter).
+_VISUAL_HOOK_RE = re.compile(
+    r"\b(?:"
+    r"cliff[-\s]?edge|cliff[-\s]?top|cliff(?:\s+drop)?|"
+    r"infinity\s+pool|rooftop\s+bar|rooftop\s+pool|"
+    r"thatched[-\s]?roof|tin[-\s]?roof|stone[-\s]?walled|"
+    r"marble\s+\w+|sandstone\s+\w+|laterite\s+\w+|"
+    r"jali\s+\w+|fresco\w*|mosaic\w*|carved\s+\w+|ornate\s+\w+|"
+    r"candy[-\s]?coloured\s+\w+|whitewashed\s+\w+|"
+    r"neon[-\s]?lit\s+\w+|fairy[-\s]?lit\s+\w+|lantern[-\s]?lit\s+\w+|"
+    r"spice[-\s]?market\s+\w+|flea[-\s]?market\s+\w+|fish\s+market\s+\w+|"
+    r"jungle\s+\w+|backwater\s+\w+|mangrove\s+\w+|"
+    r"sunset(?:\s+point)?|sunrise(?:\s+point)?|dusk|golden\s+hour|"
+    r"\d+\s*(?:ft|m|metres?|feet)(?:\s+(?:drop|high|tall|deep|wide))?"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _extract_visual_hooks(mentions: list[_PlaceMention]) -> list[str]:
+    """Pull short concrete visual phrases from a cluster's quotes.
+
+    Returns a deduped list of phrases that hint at WHAT the place looks like,
+    so Pass-2 has explicit visual fodder beyond the raw quotes. Empty if
+    none match — that's a signal to Pass-2 that this cluster is text-light.
+    """
+    hooks: list[str] = []
+    seen: set[str] = set()
+    for m in mentions:
+        for match in _VISUAL_HOOK_RE.findall(m.quote or ""):
+            phrase = " ".join(match.split()).lower()
+            if phrase and phrase not in seen:
+                seen.add(phrase)
+                hooks.append(phrase)
+                if len(hooks) >= 6:
+                    return hooks
+    return hooks
+
+
 def _format_clusters_for_pass2(
     clusters: list[tuple[str, list[_PlaceMention]]],
 ) -> str:
-    """Render clusters as the LLM input for Pass 2."""
+    """Render clusters as the LLM input for Pass 2.
+
+    Shows more quotes (8) and longer caps (300 chars) than the original
+    rendering so visual / sensory content survives into Pass-2's context.
+    Adds an explicit `visual_hooks` line per cluster when any are detected.
+    """
     blocks: list[str] = []
     for name, ms in clusters:
         videos = sorted({m.video_index for m in ms})
         cat = ms[0].category if ms else "other"
+        hooks = _extract_visual_hooks(ms)
+        hooks_line = (
+            f"\n  visual_hooks: {', '.join(hooks)}" if hooks else ""
+        )
         header = (
             f"PLACE: {name}\n"
             f"  category: {cat}\n"
             f"  videos: {videos} ({len(videos)} distinct)"
+            f"{hooks_line}"
         )
         quote_lines = []
-        for m in ms[:6]:  # cap quotes shown to keep prompt compact
+        for m in ms[:8]:  # was 6 — more evidence improves Pass-2 yield
             q = m.quote.strip().replace("\n", " ")
-            if len(q) > 220:
-                q = q[:220] + "…"
+            if len(q) > 300:  # was 220 — preserve visual context
+                q = q[:300] + "…"
             quote_lines.append(f'    [video {m.video_index}] "{q}"')
         blocks.append(header + "\n" + "\n".join(quote_lines))
     return "\n\n".join(blocks)

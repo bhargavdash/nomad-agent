@@ -15,6 +15,10 @@ def _resolve_role(role: str) -> tuple[str, str]:
     """Return (provider, model) for the given role."""
     mapping = {
         "youtube_agent": (settings.LLM_YOUTUBE_PROVIDER, settings.LLM_YOUTUBE_MODEL),
+        "youtube_longform_agent": (
+            settings.LLM_YOUTUBE_LONGFORM_PROVIDER,
+            settings.LLM_YOUTUBE_LONGFORM_MODEL,
+        ),
         "reddit_agent": (settings.LLM_REDDIT_PROVIDER, settings.LLM_REDDIT_MODEL),
         "google_agent": (settings.LLM_GOOGLE_PROVIDER, settings.LLM_GOOGLE_MODEL),
         "synthesizer": (settings.LLM_SYNTH_PROVIDER, settings.LLM_SYNTH_MODEL),
@@ -29,7 +33,8 @@ def _resolve_role(role: str) -> tuple[str, str]:
 def get_llm(role: str) -> BaseChatModel:
     """Return a configured LangChain chat model for the given agent role.
 
-    role: one of "youtube_agent" | "reddit_agent" | "google_agent" | "synthesizer".
+    role: one of "youtube_agent" | "youtube_longform_agent" | "reddit_agent"
+          | "google_agent" | "synthesizer".
     """
     provider, model = _resolve_role(role)
     provider = provider.lower()

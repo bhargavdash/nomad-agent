@@ -69,6 +69,16 @@ MAX_DISCOVERIES_RETURNED = 8
 MAX_BODY_CHARS = 500
 MAX_COMMENT_CHARS = 350
 
+# Destination-mention filter (post-fetch, pre-LLM).
+# Drops posts whose title + first DEST_MENTION_BODY_PROBE chars of body don't
+# mention any destination/sub-region token. Fixes the BENCHMARK failure mode
+# where pan-India trip-report posts dominate destination-specific queries.
+DEST_MENTION_BODY_PROBE = 300
+
+# Destination-specific subreddits get this multiplier on their post quota
+# relative to the two default generic subs (r/travel, r/solotravel).
+DEST_SUB_WEIGHT = 2
+
 # Single-shot LLM extraction batch (Reddit posts are textual; one call is fine
 # unlike YouTube's two-pass clustering).
 LLM_BATCH_SIZE = MAX_POSTS_FOR_LLM
@@ -331,11 +341,72 @@ def _build_query_subreddit_pairs(
 # ---------------------------------------------------------------------------
 
 
-def _filter_posts(posts: list[RedditPost]) -> list[RedditPost]:
-    """Drop low-score posts; keep best per (subreddit, title) duplicate."""
+_DEST_SPLIT_RE = re.compile(r"[,/&]+|\band\b", re.IGNORECASE)
+
+
+def _destination_tokens(destination: str) -> set[str]:
+    """Tokens that count as 'this post mentions the destination'.
+
+    Includes the full destination string and each comma/and-separated part,
+    each as a lowercased multi-token phrase. We deliberately include
+    short single tokens too — for "Goa, India" we want any of {"goa, india",
+    "goa", "india"} to count. For multi-word names like "New York" we keep
+    the joined phrase so we don't falsely match "new" alone.
+    """
+    lowered = destination.lower().strip()
+    if not lowered:
+        return set()
+    tokens: set[str] = {lowered}
+    for part in _DEST_SPLIT_RE.split(lowered):
+        p = part.strip()
+        if p:
+            tokens.add(p)
+    return {t for t in tokens if t}
+
+
+def _post_mentions_destination(
+    post: RedditPost, dest_tokens: set[str]
+) -> bool:
+    """True if title or first DEST_MENTION_BODY_PROBE chars of body name the destination.
+
+    Handles the BENCHMARK failure: pan-India trip reports surface for queries
+    like 'Manali tips' because they tag "India" / "travel" subs broadly. Such
+    posts have no Manali content in title or opening paragraph — drop them
+    before sending to the LLM.
+
+    Matches on word boundaries so "india" doesn't match "indian SIM card".
+    """
+    if not dest_tokens:
+        return True
+    haystack = (post.title or "").lower()
+    body = (post.selftext or "").lower()[:DEST_MENTION_BODY_PROBE]
+    haystack = haystack + " " + body
+    for tok in dest_tokens:
+        # Word-boundary regex match; tokens are short (≤ a few words) so
+        # compile-per-call is fine. Escape to handle punctuation in tokens
+        # (e.g. the joined-phrase "goa, india").
+        pattern = r"\b" + re.escape(tok) + r"\b"
+        if re.search(pattern, haystack):
+            return True
+    return False
+
+
+def _filter_posts(
+    posts: list[RedditPost],
+    dest_tokens: set[str] | None = None,
+    default_subs: set[str] | None = None,
+) -> list[RedditPost]:
+    """Drop low-score posts and pan-destination noise; dedupe by title.
+
+    Strategy:
+      1. score floor (MIN_POST_SCORE).
+      2. dedupe across cross-posts by title, keeping the highest-scoring copy.
+      3. destination-mention filter (title or first chars of body).
+      4. weighted budget: destination-specific subs get DEST_SUB_WEIGHT× the
+         per-sub quota of generic default subs (travel, solotravel).
+    """
     survivors = [p for p in posts if p.score >= MIN_POST_SCORE]
-    # Some posts are cross-posted with same title across subs; keep the
-    # highest-scoring per title.
+
     by_title: dict[str, RedditPost] = {}
     for p in survivors:
         key = p.title.lower().strip()
@@ -343,7 +414,56 @@ def _filter_posts(posts: list[RedditPost]) -> list[RedditPost]:
         if existing is None or p.score > existing.score:
             by_title[key] = p
     deduped = sorted(by_title.values(), key=lambda p: p.score, reverse=True)
-    return deduped[:MAX_POSTS_FOR_LLM]
+
+    if dest_tokens:
+        before = len(deduped)
+        deduped = [p for p in deduped if _post_mentions_destination(p, dest_tokens)]
+        dropped = before - len(deduped)
+        if dropped:
+            logger.info(
+                "reddit.filter.dropped_off_topic count=%d kept=%d",
+                dropped, len(deduped),
+            )
+
+    if not default_subs:
+        return deduped[:MAX_POSTS_FOR_LLM]
+
+    # Weighted quota: per-sub cap that's higher for destination-specific subs.
+    # MAX_POSTS_FOR_LLM is the overall cap; allocate within that, prioritising
+    # destination subs by giving them more headroom and filling generic last.
+    per_default = max(1, MAX_POSTS_FOR_LLM // (DEST_SUB_WEIGHT + 1))
+    per_dest = per_default * DEST_SUB_WEIGHT
+
+    kept: list[RedditPost] = []
+    seen_ids: set[str] = set()
+    by_sub_count: dict[str, int] = {}
+    # First pass: destination-specific subs only.
+    for p in deduped:
+        if p.post_id in seen_ids:
+            continue
+        if p.subreddit in default_subs:
+            continue
+        if by_sub_count.get(p.subreddit, 0) >= per_dest:
+            continue
+        kept.append(p)
+        seen_ids.add(p.post_id)
+        by_sub_count[p.subreddit] = by_sub_count.get(p.subreddit, 0) + 1
+        if len(kept) >= MAX_POSTS_FOR_LLM:
+            return kept
+    # Second pass: fill with default subs up to per-default cap each.
+    for p in deduped:
+        if p.post_id in seen_ids:
+            continue
+        if p.subreddit not in default_subs:
+            continue
+        if by_sub_count.get(p.subreddit, 0) >= per_default:
+            continue
+        kept.append(p)
+        seen_ids.add(p.post_id)
+        by_sub_count[p.subreddit] = by_sub_count.get(p.subreddit, 0) + 1
+        if len(kept) >= MAX_POSTS_FOR_LLM:
+            break
+    return kept
 
 
 # ---------------------------------------------------------------------------
@@ -357,7 +477,13 @@ Reddit threads carry signal that guidebooks and YouTube videos miss: warnings, s
 
 You are given 8-12 posts (title + body + top comments). Each post will typically yield 0-2 insights. AIM TO RETURN 5-8 INSIGHTS overall. If you return fewer than 3 you are almost certainly being too strict — extract what's there.
 
-WHAT COUNTS AS AN INSIGHT (lenient — extract liberally):
+DESTINATION SPECIFICITY (CRITICAL):
+- Only extract insights specifically about {destination}.
+- Many posts are pan-region trip reports that mention many places. For those, extract ONLY the {destination}-specific paragraphs/sentences. Ignore tangents about other places.
+- If a post is not primarily about {destination} (e.g. discusses India broadly when {destination} is "Manali"), return nothing for that post — don't try to salvage a generic tip.
+- Every `topic` MUST be tied to {destination}, a named sub-area of it, or a named feature inside it (a road, neighbourhood, hostel, dish, viewpoint, festival). Generic country-wide tips ("Indian public toilets", "Indian SIM cards") do NOT belong here.
+
+WHAT COUNTS AS AN INSIGHT (lenient within destination scope — extract liberally):
 - Any specific place / road / neighborhood / hostel / dish / cafe / route mentioned with even a sentence of context.
 - Any practical advice with a number, date, or named thing (price, route, season, transport mode).
 - Any "skip X / go Y" contrarian recommendation.
@@ -366,7 +492,8 @@ WHAT COUNTS AS AN INSIGHT (lenient — extract liberally):
 `topic`: a SHORT label naming the specific thing — a proper noun or named situation. Examples:
   GOOD:  "Manali-Leh highway in July", "Old Manali cafés", "Solang Valley paragliding scams",
          "Sleeper bus from Delhi to Manali", "Hadimba Temple", "Kasol vs Manali".
-  BAD:   "beaches", "safety", "food", "transport", "things to avoid", "general tips".
+  BAD:   "beaches", "safety", "food", "transport", "things to avoid", "general tips",
+         "Indian SIM cards" (not destination-tied), "RPO Chandigarh passport surrender".
 If the topic feels generic, prefix it with a place ("Manali bus station scams" not "scams").
 
 `insight`: 1-3 sentences in Reddit's voice, grounded in what the posts actually say.
@@ -382,7 +509,7 @@ If the topic feels generic, prefix it with a place ("Manali bus station scams" n
 
 `confidence`: 'high' if 3+ posts mention it, 'medium' if 2, 'low' if 1.
 
-OUTPUT: JSON {"insights": [...]}. TARGET 5-8 insights when the posts have content. Returning 0 from a 10-post batch is failure mode — it almost always means you were too strict. Re-read the posts and extract anything specific."""
+OUTPUT: JSON {{"insights": [...]}}. TARGET 5-8 insights when the posts have content. Returning 0 from a 10-post batch is failure mode IF the posts are actually about {destination} — re-read and extract anything specific. If most posts turn out to be off-topic for {destination}, returning 0-2 is correct."""
 
 
 def _format_posts_for_prompt(posts: list[RedditPost]) -> str:
@@ -447,11 +574,13 @@ async def _extract_via_llm(
         f"Vibes: {', '.join(trip_params.vibes) if trip_params.vibes else '—'}\n\n"
         f"Reddit posts (with top comments):\n\n"
         f"{_format_posts_for_prompt(posts)}\n\n"
-        f"Extract up to 8 concrete insights. Empty list is acceptable if posts "
-        f"don't carry concrete content."
+        f"Extract up to 8 concrete insights about {trip_params.destination}. "
+        f"Empty list is acceptable if posts don't carry concrete {trip_params.destination}-"
+        f"specific content."
     )
+    system = _REDDIT_SYSTEM.format(destination=trip_params.destination)
     messages: list[Any] = [
-        SystemMessage(content=_REDDIT_SYSTEM),
+        SystemMessage(content=system),
         HumanMessage(content=user),
     ]
     result = await structured.ainvoke(messages)
@@ -577,10 +706,15 @@ async def run_reddit_agent(
             logger.warning("reddit_agent: 0 posts across all queries")
             return []
 
-        filtered = _filter_posts(raw_posts)
+        dest_tokens = _destination_tokens(trip_params.destination)
+        filtered = _filter_posts(
+            raw_posts,
+            dest_tokens=dest_tokens,
+            default_subs=set(_DEFAULT_SUBREDDITS),
+        )
         logger.info(
-            "reddit_agent: %d posts after filter (from %d)",
-            len(filtered), len(raw_posts),
+            "reddit_agent: %d posts after filter (from %d, dest_tokens=%r)",
+            len(filtered), len(raw_posts), sorted(dest_tokens),
         )
         if not filtered:
             return []

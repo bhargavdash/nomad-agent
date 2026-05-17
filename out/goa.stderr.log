@@ -1,0 +1,228 @@
+python-dotenv could not parse statement starting at line 10
+Loading trip from: samples\goa-december.json
+
+======================================================================
+  Trip: Goa, India  (2026-12-15 → 2026-12-22)
+======================================================================
+Duration  : 7 days
+Travelers : 2
+Vibes     : beaches, street food, nightlife, hidden gems
+Pace      : Balanced
+Budget    : $$
+Accommo.  : Boutique Villa
+
+======================================================================
+  Stage 1 — Signals (pure Python, no LLM)
+======================================================================
+Region          : india
+Season          : peak
+Crowd level     : very_peak
+Budget tier     : mid
+Pace density    : 4 stops/day target
+Active festivals: ['Christmas/NYE']
+Weather hint    : —
+Query modifiers : ['peak season', 'best weather', 'avoid crowds', 'hidden gems', 'off-the-beaten-path', 'early morning', 'Christmas/NYE celebrations', 'local cuisine', 'beaches', 'street food', 'nightlife']
+Warnings        : —
+Vibe→source wts : {'youtube': 0.4015, 'reddit': 0.3796, 'blog': 0.219}
+
+======================================================================
+  Stage 2 — YouTubeShorts agent (sequential)
+======================================================================
+2026-05-12 21:56:51,984 [INFO] app.agents.youtube_shorts: youtube_agent.start queries=['Goa, India travel vlog', 'Goa, India food', 'Goa, India beaches', 'Goa, India hidden places']
+2026-05-12 21:56:51,985 [INFO] app.tools.youtube: youtube.search query='Goa, India travel vlog' max=15
+2026-05-12 21:56:52,146 [INFO] app.tools.youtube: youtube.search query='Goa, India food' max=15
+2026-05-12 21:56:52,162 [INFO] app.tools.youtube: youtube.search query='Goa, India beaches' max=15
+2026-05-12 21:56:52,178 [INFO] app.tools.youtube: youtube.search query='Goa, India hidden places' max=15
+2026-05-12 21:56:54,155 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/search?part=id&q=Goa%2C+India+beaches&type=video&videoDuration=short&maxResults=15&order=relevance&safeSearch=moderate&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-12 21:56:54,157 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/search?part=id&q=Goa%2C+India+hidden+places&type=video&videoDuration=short&maxResults=15&order=relevance&safeSearch=moderate&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-12 21:56:54,158 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/search?part=id&q=Goa%2C+India+travel+vlog&type=video&videoDuration=short&maxResults=15&order=relevance&safeSearch=moderate&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-12 21:56:54,399 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/search?part=id&q=Goa%2C+India+food&type=video&videoDuration=short&maxResults=15&order=relevance&safeSearch=moderate&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-12 21:56:54,616 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/videos?part=contentDetails%2Csnippet%2Cstatistics&id=mfpmyi2whhU%2CPlPk2SYwp3Y%2CJWnVJx4qsj4%2C4CFx_KpU82w%2Cz_8Gzjx3s_Q%2CmTMD4bCzJ2k%2CX81wJRAoJ-E%2CFFwPNJga0gc%2CTw-ySlKwfVM%2CZpqpvWdq3V8%2C-8LwSUi4OiU%2CstfOvIGlM68%2CWRlMqsXftug%2C6oSvnEtB0lY%2CpFIZgjuPWGI&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-12 21:56:54,618 [INFO] app.tools.youtube: youtube.search kept 15/15 short-form items (<=300s)
+2026-05-12 21:56:54,665 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/videos?part=contentDetails%2Csnippet%2Cstatistics&id=wn7uNZ9sjiw%2Czo51DwqBmsw%2Cz_8Gzjx3s_Q%2CBMnR-o2pt8M%2CEVE5Yl7_sc0%2Cq0IN0G_v6OI%2CYqaRt3s1nQM%2Cs1A-J3OiJvY%2CZoc9ro_Z0Z4%2C-e5gSAjslHY%2CFpF4EyvsIU0%2CPYAw2mY5a18%2CJTEihLAn1F8%2CIO1pX1gafOc%2CPlPk2SYwp3Y&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-12 21:56:54,670 [INFO] app.tools.youtube: youtube.search kept 15/15 short-form items (<=300s)
+2026-05-12 21:56:54,674 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/videos?part=contentDetails%2Csnippet%2Cstatistics&id=mfpmyi2whhU%2CMNqxmsQPOvo%2CRBJuFF0MF2M%2Cq0IN0G_v6OI%2CJAKXKQbKlkQ%2CBMnR-o2pt8M%2CFFwPNJga0gc%2CmTMD4bCzJ2k%2CdMJwcmTD3yo%2CaOjqx00d4RM%2C61gYc-ypMqU%2C13joaJiQQH8%2Ca7JZ02jXT4I%2CWRlMqsXftug%2CeEATc3sTY4Y&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-12 21:56:54,679 [INFO] app.tools.youtube: youtube.search kept 15/15 short-form items (<=300s)
+2026-05-12 21:56:54,841 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/videos?part=contentDetails%2Csnippet%2Cstatistics&id=T8nDxHc5MC0%2C1EP_iUs6-xA%2CVYxt6sIEYzU%2CB1wj8jHGjbQ%2Cb7Voe4JPZ-s%2CihrHZICoAyo%2CAAc1I1KuJS0%2C9gHMqeLP994%2CjlPzRgm5e_g%2CNcUOY6CWuwE%2Clz4LLTfQ_CA%2Cd5P8NqJRCUo%2ChRx6rbTCg_I%2C8vn-PkIt5og%2C9rGj7QegadY&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-12 21:56:54,855 [INFO] app.tools.youtube: youtube.search kept 15/15 short-form items (<=300s)
+2026-05-12 21:56:54,855 [INFO] app.agents.youtube_shorts: youtube_agent.fanout queries=4 unique_videos=52
+2026-05-12 21:56:54,856 [INFO] app.agents.youtube_shorts: youtube_agent: 30 videos after quality filter (from 52)
+2026-05-12 21:57:06,057 [INFO] app.agents.youtube_shorts: youtube_agent.transcripts fetched 3/18
+2026-05-12 21:57:08,729 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-12 21:57:08,787 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-12 21:57:08,837 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-12 21:57:08,840 [INFO] app.agents.youtube_shorts: youtube_agent.pass1 batches=3 mentions=18
+2026-05-12 21:57:08,840 [INFO] app.agents.youtube_shorts: youtube_agent.two_pass clusters=14 (top: ['Baga beach', 'Masala Crab', 'Parra Road', 'Anjuna Beach', 'Arambol beach'])
+2026-05-12 21:57:09,994 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-12 21:57:09,997 [INFO] app.agents.youtube_shorts: youtube_agent.pass2 returned=1
+2026-05-12 21:57:09,997 [INFO] app.agents.youtube_shorts: youtube_agent.done extracted=1 kept=1 returned=1
+
+YouTube: 1 discoveries
+  [ 1] (youtube) Baga beach
+       tags=['beach', 'peak-season']  body=A popular beach in Goa with multiple mentions across different videos, indicating its prominence in the region.
+
+======================================================================
+  Stage 3 — Reddit agent (sequential)
+======================================================================
+2026-05-12 21:57:09,998 [INFO] app.agents.reddit: reddit_agent.start subs=['travel', 'solotravel', 'india', 'IndiaTravel', 'goa'] queries=['Goa, India tips', 'Goa, India what to avoid', 'Goa, India hidden gems avoid tourists', 'Goa, India beaches', 'Goa, India peak', 'Goa, India Christmas/NYE'] pairs=18
+2026-05-12 21:57:09,998 [INFO] app.tools.reddit: reddit.search sub=travel q='Goa, India tips' limit=8
+2026-05-12 21:57:12,561 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/search.json?q=Goa%2C+India+tips&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:12,662 [INFO] app.tools.reddit: reddit.search sub=travel q='Goa, India tips' got=8 (via https://www.reddit.com)
+2026-05-12 21:57:13,664 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Goa, India tips' limit=8
+2026-05-12 21:57:15,522 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/search.json?q=Goa%2C+India+tips&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:15,524 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Goa, India tips' got=8 (via https://www.reddit.com)
+2026-05-12 21:57:16,527 [INFO] app.tools.reddit: reddit.search sub=india q='Goa, India tips' limit=8
+2026-05-12 21:57:17,520 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/search.json?q=Goa%2C+India+tips&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:17,524 [INFO] app.tools.reddit: reddit.search sub=india q='Goa, India tips' got=8 (via https://www.reddit.com)
+2026-05-12 21:57:18,527 [INFO] app.tools.reddit: reddit.search sub=travel q='Goa, India what to avoid' limit=8
+2026-05-12 21:57:19,108 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/search.json?q=Goa%2C+India+what+to+avoid&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:19,110 [INFO] app.tools.reddit: reddit.search sub=travel q='Goa, India what to avoid' got=3 (via https://www.reddit.com)
+2026-05-12 21:57:20,118 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Goa, India what to avoid' limit=8
+2026-05-12 21:57:21,475 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/search.json?q=Goa%2C+India+what+to+avoid&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:21,479 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Goa, India what to avoid' got=2 (via https://www.reddit.com)
+2026-05-12 21:57:22,483 [INFO] app.tools.reddit: reddit.search sub=india q='Goa, India what to avoid' limit=8
+2026-05-12 21:57:25,197 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/search.json?q=Goa%2C+India+what+to+avoid&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:25,201 [INFO] app.tools.reddit: reddit.search sub=india q='Goa, India what to avoid' got=3 (via https://www.reddit.com)
+2026-05-12 21:57:26,206 [INFO] app.tools.reddit: reddit.search sub=travel q='Goa, India hidden gems avoid tourists' limit=8
+2026-05-12 21:57:28,025 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/search.json?q=Goa%2C+India+hidden+gems+avoid+tourists&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:28,718 [INFO] app.tools.reddit: reddit.search sub=travel q='Goa, India hidden gems avoid tourists' got=8 (via https://www.reddit.com)
+2026-05-12 21:57:29,720 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Goa, India hidden gems avoid tourists' limit=8
+2026-05-12 21:57:33,539 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/search.json?q=Goa%2C+India+hidden+gems+avoid+tourists&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:33,553 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Goa, India hidden gems avoid tourists' got=8 (via https://www.reddit.com)
+2026-05-12 21:57:34,559 [INFO] app.tools.reddit: reddit.search sub=india q='Goa, India hidden gems avoid tourists' limit=8
+2026-05-12 21:57:35,719 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/search.json?q=Goa%2C+India+hidden+gems+avoid+tourists&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:35,727 [INFO] app.tools.reddit: reddit.search sub=india q='Goa, India hidden gems avoid tourists' got=8 (via https://www.reddit.com)
+2026-05-12 21:57:36,731 [INFO] app.tools.reddit: reddit.search sub=travel q='Goa, India beaches' limit=8
+2026-05-12 21:57:38,372 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/search.json?q=Goa%2C+India+beaches&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:38,449 [INFO] app.tools.reddit: reddit.search sub=travel q='Goa, India beaches' got=8 (via https://www.reddit.com)
+2026-05-12 21:57:39,455 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Goa, India beaches' limit=8
+2026-05-12 21:57:41,871 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/search.json?q=Goa%2C+India+beaches&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:41,915 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Goa, India beaches' got=8 (via https://www.reddit.com)
+2026-05-12 21:57:42,923 [INFO] app.tools.reddit: reddit.search sub=india q='Goa, India beaches' limit=8
+2026-05-12 21:57:44,061 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/search.json?q=Goa%2C+India+beaches&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:44,064 [INFO] app.tools.reddit: reddit.search sub=india q='Goa, India beaches' got=8 (via https://www.reddit.com)
+2026-05-12 21:57:45,067 [INFO] app.tools.reddit: reddit.search sub=travel q='Goa, India peak' limit=8
+2026-05-12 21:57:46,142 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/search.json?q=Goa%2C+India+peak&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:46,286 [INFO] app.tools.reddit: reddit.search sub=travel q='Goa, India peak' got=8 (via https://www.reddit.com)
+2026-05-12 21:57:47,290 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Goa, India peak' limit=8
+2026-05-12 21:57:50,337 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/search.json?q=Goa%2C+India+peak&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:50,403 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Goa, India peak' got=8 (via https://www.reddit.com)
+2026-05-12 21:57:51,408 [INFO] app.tools.reddit: reddit.search sub=india q='Goa, India peak' limit=8
+2026-05-12 21:57:52,355 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/search.json?q=Goa%2C+India+peak&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:52,377 [INFO] app.tools.reddit: reddit.search sub=india q='Goa, India peak' got=8 (via https://www.reddit.com)
+2026-05-12 21:57:53,389 [INFO] app.tools.reddit: reddit.search sub=travel q='Goa, India Christmas/NYE' limit=8
+2026-05-12 21:57:55,812 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/search.json?q=Goa%2C+India+Christmas%2FNYE&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:56,085 [INFO] app.tools.reddit: reddit.search sub=travel q='Goa, India Christmas/NYE' got=8 (via https://www.reddit.com)
+2026-05-12 21:57:57,100 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Goa, India Christmas/NYE' limit=8
+2026-05-12 21:57:57,991 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/search.json?q=Goa%2C+India+Christmas%2FNYE&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:58,017 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Goa, India Christmas/NYE' got=8 (via https://www.reddit.com)
+2026-05-12 21:57:59,021 [INFO] app.tools.reddit: reddit.search sub=india q='Goa, India Christmas/NYE' limit=8
+2026-05-12 21:57:59,746 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/search.json?q=Goa%2C+India+Christmas%2FNYE&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-12 21:57:59,773 [INFO] app.tools.reddit: reddit.search sub=india q='Goa, India Christmas/NYE' got=8 (via https://www.reddit.com)
+2026-05-12 21:57:59,774 [INFO] app.agents.reddit: reddit_agent: 10 posts after filter (from 86)
+2026-05-12 21:58:00,387 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/comments/1r8drmr/oman_the_most_incredible_nature_in_the_gulf_dec.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-12 21:58:04,289 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/comments/1oy0h9n/ive_been_to_105_countries_heres_a_my_list_that_no.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-12 21:58:05,944 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/comments/1peo2yl/indigos_chaos_wasnt_a_failure_it_was_a.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-12 21:58:07,888 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/comments/1qwp47k/japan_you_were_amazing.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-12 21:58:09,505 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/comments/1odycnl/my_trip_around_india.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-12 21:58:11,127 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/comments/1t5hmpe/10_amazing_days_in_stunning_myanmar.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-12 21:58:13,400 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/comments/1p4n5qy/my_foreign_friends_experienced_rural_indian.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-12 21:58:15,775 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/comments/1pg359r/how_people_are_surviving_india_came_for_a_month.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-12 21:58:17,755 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/comments/1r71x5z/4_weeks_in_central_and_northish_india_w_group.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-12 21:58:20,390 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/comments/1okbncs/traveled_around_saudi_arabia_for_9_days_and_it.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-12 21:58:22,517 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-12 21:58:22,520 [INFO] app.agents.reddit: reddit_agent.llm_extracted=5
+2026-05-12 21:58:22,521 [INFO] app.agents.reddit: reddit_agent.done extracted=5 kept=5 returned=5
+
+Reddit: 5 discoveries
+  [ 1] ( reddit) India travel challenges
+       tags=['reddit', 'warning']  body=Warning: Traveling in India can be challenging, with issues such as public toilets, crowds, and chaos, as experienced by…
+  [ 2] ( reddit) Goa
+       tags=['reddit', 'tip']  body=Tip: The user in post 5 spent a few weeks traveling around India, starting in Goa, where they mostly had beach days and …
+  [ 3] ( reddit) India public toilets
+       tags=['reddit', 'warning']  body=Warning: Public toilets in India can be humiliating, with no hygiene, no dignity, and no maintenance, as experienced by …
+  [ 4] ( reddit) India rural hospitality
+       tags=['reddit', 'tip']  body=Tip: Rural Indian hospitality can be astonishing, as experienced by the user in post 7, who took their foreign friends o…
+  [ 5] ( reddit) Himachal Pradesh
+       tags=['reddit', 'tip']  body=Tip: Himachal Pradesh is a good destination for those seeking mountain peace and clean air, as experienced by the user i…
+
+======================================================================
+  Stage 4 — Google Blog agent (sequential)
+======================================================================
+2026-05-12 21:58:22,521 [INFO] app.agents.google_blog: google_agent.start queries=['best Goa, India peak travel guide', 'Goa, India beaches travel tips', 'Goa, India itinerary things to do', 'Goa, India Christmas/NYE guide']
+2026-05-12 21:58:25,125 [INFO] httpx: HTTP Request: POST https://api.tavily.com/search "HTTP/1.1 200 OK"
+2026-05-12 21:58:25,126 [INFO] app.tools.tavily_search: tavily.search q='Goa, India Christmas/NYE guide' results=5
+2026-05-12 21:58:25,187 [INFO] httpx: HTTP Request: POST https://api.tavily.com/search "HTTP/1.1 200 OK"
+2026-05-12 21:58:25,193 [INFO] httpx: HTTP Request: POST https://api.tavily.com/search "HTTP/1.1 200 OK"
+2026-05-12 21:58:25,193 [INFO] app.tools.tavily_search: tavily.search q='best Goa, India peak travel guide' results=5
+2026-05-12 21:58:25,212 [INFO] app.tools.tavily_search: tavily.search q='Goa, India itinerary things to do' results=5
+2026-05-12 21:58:26,196 [INFO] httpx: HTTP Request: POST https://api.tavily.com/search "HTTP/1.1 200 OK"
+2026-05-12 21:58:26,197 [INFO] app.tools.tavily_search: tavily.search q='Goa, India beaches travel tips' results=0
+2026-05-12 21:58:26,197 [INFO] app.tools.tavily_search: tavily.fanout queries=4 unique_results=15
+2026-05-12 21:58:26,197 [INFO] app.agents.google_blog: google_agent: 15 articles after fanout+dedupe (using 15)
+2026-05-12 21:58:27,918 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-12 21:58:27,922 [INFO] app.agents.google_blog: google_agent.llm_extracted=5
+2026-05-12 21:58:27,923 [INFO] app.agents.google_blog: google_agent.done extracted=5 kept=5 returned=5
+
+Google Blog: 5 discoveries
+  [ 1] (   blog) Chapora Fort
+       tags=['blog']  body=This fort offers one of the best panoramic coastal views, made famous by the movie Dil Chahta Hai. Best for: solo travel…
+  [ 2] (   blog) Antares
+       tags=['blog']  body=A beach club with great food, located in North Goa. Best for: couples, foodies.
+  [ 3] (   blog) Purple Martini
+       tags=['blog']  body=A great place to grab a cocktail while watching the sunset, located in North Goa. Best for: couples, sunset enthusiasts.
+  [ 4] (   blog) Anjuna Flea Market
+       tags=['blog']  body=A popular market in North Goa, great for shopping and exploring. Best for: shopaholics, street food enthusiasts.
+  [ 5] (   blog) Chorao Island
+       tags=['blog']  body=A sleepy island in North Goa, known for its gentle backwaters and friendly locals. Best for: solo travelers, those looki…
+
+======================================================================
+  Stage 5 — Merge
+======================================================================
+Total discoveries: 11  (yt=1  reddit=5  blog=5)
+
+======================================================================
+  Stage 6 — Synthesizer (LLM call)
+======================================================================
+2026-05-12 21:58:27,923 [INFO] app.agents.synthesizer: synthesizer.start destination='Goa, India' discoveries=11 candidates=11 days=7 pace=4
+2026-05-12 21:58:33,639 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-12 21:58:33,643 [INFO] app.agents.synthesizer: synthesizer.done attempt=1 days=7 stops=23 discoveries=11
+Days       : 7
+Total stops: 23
+Discoveries: 11
+Emoji      : 🌴
+Stats      : places=22 tips=5 photo_stops=3
+
+--- Per-stop source breakdown ---
+  Day 1 #1  10:00 AM  (youtube)  Baga beach
+  Day 1 #2  12:30 PM  (   maps)  Lunch at a local eatery
+  Day 1 #3   2:30 PM  (   maps)  Explore the local market
+  Day 1 #4   5:00 PM  (   maps)  Sunset at the beach
+  Day 2 #1   9:00 AM  (   blog)  Chapora Fort
+  Day 2 #2  12:00 PM  (   blog)  Lunch at Antares
+  Day 2 #3   2:00 PM  (   maps)  Relaxation time at the beach
+  Day 2 #4   7:00 PM  (   maps)  Dinner at a local restaurant
+  Day 3 #1  10:00 AM  (   blog)  Anjuna Flea Market
+  Day 3 #2   5:00 PM  (   blog)  Purple Martini
+  Day 3 #3   2:00 PM  (   maps)  Cultural anchor
+  Day 4 #1   9:00 AM  (   blog)  Chorao Island
+  Day 4 #2   2:30 PM  (   maps)  Explore the island
+  Day 4 #3   5:00 PM  (   maps)  Return to North Goa
+  Day 5 #1  10:00 AM  (   maps)  Christmas market
+  Day 5 #2   9:00 PM  (   maps)  Party at a local nightclub
+  Day 5 #3   2:00 PM  (   maps)  Cultural anchor
+  Day 6 #1   8:00 AM  (   maps)  Breakfast at the villa
+  Day 6 #2  10:00 AM  (   maps)  Beach time
+  Day 6 #3   3:00 PM  (   maps)  Pool time
+  Day 7 #1  10:00 AM  (   maps)  Check-out from the villa
+  Day 7 #2  11:00 AM  (   maps)  Departure from North Goa
+  Day 7 #3   1:00 PM  (   maps)  Lunch at the airport
+
+--- Source totals across all stops ---
+     maps: 17
+     blog: 5
+  youtube: 1
+
+======================================================================
+  Final AIItinerary JSON (stdout)
+======================================================================

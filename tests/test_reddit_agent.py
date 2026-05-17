@@ -11,11 +11,16 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.agents.reddit import (
+    DEST_SUB_WEIGHT,
+    MAX_POSTS_FOR_LLM,
+    _DEFAULT_SUBREDDITS,
     _ExtractedInsight,
     _build_queries,
     _build_query_subreddit_pairs,
     _build_subreddits,
+    _destination_tokens,
     _filter_posts,
+    _post_mentions_destination,
     _to_research_discoveries,
     _validate_and_dedupe,
     run_reddit_agent,
@@ -350,10 +355,13 @@ async def test_run_reddit_agent_swallows_unexpected_errors() -> None:
 async def test_run_reddit_agent_happy_path_with_mocks() -> None:
     trip = _trip()
     signals = extract_signals(trip)
+    # Destination filter now requires title or opening body to mention the
+    # destination tokens — update these to satisfy that (matches realistic
+    # on-topic posts after the BENCHMARK §7 Reddit fix).
     fake_posts = [
         _post("a", subreddit="IndiaTravel", title="Manali in monsoon"),
-        _post("b", subreddit="travel", title="Skip Rohtang in July"),
-        _post("c", subreddit="solotravel", title="Local food tips"),
+        _post("b", subreddit="travel", title="Skip Rohtang on Manali-Leh in July"),
+        _post("c", subreddit="solotravel", title="Local food tips for Manali"),
     ]
     extracted = [
         _ExtractedInsight(
@@ -401,11 +409,134 @@ async def test_run_reddit_agent_happy_path_with_mocks() -> None:
     assert warn.body.startswith("Warning")
 
 
+# ---------------------------------------------------------------------------
+# Destination filter (Tier 1 quick-wins addition — BENCHMARK §7 Reddit fix)
+# ---------------------------------------------------------------------------
+
+
+def test_destination_tokens_keeps_full_string_and_parts() -> None:
+    toks = _destination_tokens("Goa, India")
+    assert "goa, india" in toks
+    assert "goa" in toks
+    assert "india" in toks
+
+
+def test_destination_tokens_handles_multiword_names() -> None:
+    toks = _destination_tokens("New York, USA")
+    assert "new york" in toks
+    assert "usa" in toks
+    # We DO keep the joined multi-word phrase to avoid matching "new" alone.
+    assert "new york, usa" in toks
+
+
+def test_destination_tokens_empty_input_returns_empty() -> None:
+    assert _destination_tokens("") == set()
+    assert _destination_tokens("   ") == set()
+
+
+def test_post_mentions_destination_title_match() -> None:
+    dest = _destination_tokens("Manali, India")
+    p = _post("p1", title="Manali in July — is the road open?", body="")
+    assert _post_mentions_destination(p, dest)
+
+
+def test_post_mentions_destination_body_match_in_opening() -> None:
+    dest = _destination_tokens("Manali, India")
+    p = _post(
+        "p1",
+        title="India trip report",
+        body="Spent four days in Manali, did the Bhrigu Lake trek...",
+    )
+    assert _post_mentions_destination(p, dest)
+
+
+def test_post_mentions_destination_drops_pan_region_off_topic() -> None:
+    """BENCHMARK regression: posts like 'Indian SIM cards' that match r/india
+    search but never name the actual destination must be dropped."""
+    dest = _destination_tokens("Manali, India")
+    p = _post(
+        "p1",
+        title="How I surrendered my passport at RPO Chandigarh",
+        body=(
+            "Quick PSA. Went to the Regional Passport Office in Chandigarh "
+            "for a surrender procedure. Lines were long, bring water, plan a "
+            "morning visit."
+        ),
+    )
+    assert not _post_mentions_destination(p, dest)
+
+
+def test_post_mentions_destination_no_tokens_lets_everything_through() -> None:
+    p = _post("p1", title="Any post at all")
+    assert _post_mentions_destination(p, set())
+
+
+def test_filter_drops_off_topic_posts_when_dest_tokens_provided() -> None:
+    dest = _destination_tokens("Manali, India")
+    posts = [
+        _post("on1", title="Best cafés in Old Manali", subreddit="IndiaTravel"),
+        _post("off1", title="Indian SIM card guide", body="Airtel vs Jio",
+              subreddit="india"),
+        _post("on2", title="Manali-Leh highway report", subreddit="ladakh"),
+        _post("off2", title="Goa beach hut prices", subreddit="travel"),
+    ]
+    kept = _filter_posts(
+        posts,
+        dest_tokens=dest,
+        default_subs=set(_DEFAULT_SUBREDDITS),
+    )
+    kept_ids = {p.post_id for p in kept}
+    assert "on1" in kept_ids
+    assert "on2" in kept_ids
+    assert "off1" not in kept_ids
+    assert "off2" not in kept_ids
+
+
+def test_filter_weights_destination_specific_subs_above_generic() -> None:
+    """With on-topic posts in both buckets, the destination-specific sub
+    should dominate the kept set by at least DEST_SUB_WEIGHT-to-1."""
+    dest = _destination_tokens("Goa, India")
+    posts: list[RedditPost] = []
+    for i in range(20):
+        posts.append(_post(
+            f"goa{i}", subreddit="goa", title=f"Goa tip {i}", score=100 - i,
+        ))
+    for i in range(20):
+        posts.append(_post(
+            f"trv{i}", subreddit="travel", title=f"Goa report {i}", score=80 - i,
+        ))
+
+    kept = _filter_posts(
+        posts,
+        dest_tokens=dest,
+        default_subs=set(_DEFAULT_SUBREDDITS),
+    )
+    goa_count = sum(1 for p in kept if p.subreddit == "goa")
+    travel_count = sum(1 for p in kept if p.subreddit == "travel")
+    assert len(kept) <= MAX_POSTS_FOR_LLM
+    assert goa_count >= travel_count
+    if travel_count > 0:
+        assert goa_count >= DEST_SUB_WEIGHT * travel_count
+
+
+def test_filter_back_compat_no_weighting_when_default_subs_none() -> None:
+    """Existing callers passing no default_subs keep the original simple-cap
+    behavior so this is a non-breaking change."""
+    dest = _destination_tokens("Goa")
+    posts = [
+        _post(f"p{i}", title=f"Goa thing {i}", score=100 - i) for i in range(15)
+    ]
+    kept = _filter_posts(posts, dest_tokens=dest)
+    assert len(kept) == MAX_POSTS_FOR_LLM
+
+
 @pytest.mark.asyncio
 async def test_run_reddit_agent_drops_vague_llm_output() -> None:
     trip = _trip()
     signals = extract_signals(trip)
-    fake_posts = [_post("a")]
+    # Post mentions Manali so it passes the new destination filter — the test
+    # is about the LLM output being vague, not the post being off-topic.
+    fake_posts = [_post("a", title="Manali in monsoon — anyone been?")]
     extracted = [
         _ExtractedInsight(
             topic="Manali",

@@ -1,0 +1,14 @@
+{
+  "trip_id": "00000000-0000-0000-0000-000000000011",
+  "user_id": "00000000-0000-0000-0000-0000000000aa",
+  "destination": "Manali, India",
+  "date_from": "2026-07-10",
+  "date_to": "2026-07-17",
+  "duration_days": 7,
+  "travelers": "2",
+  "vibes": ["adventure", "hidden gems", "mountains"],
+  "accommodation": "Boutique Stay",
+  "pace": "Action-Packed",
+  "budget": "$$",
+  "preferences": "Open to off-the-beaten-path treks; risk-aware about monsoon road conditions."
+}
