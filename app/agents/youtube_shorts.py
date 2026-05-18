@@ -432,6 +432,9 @@ Rules:
   infinity pool, spice-market alley, neon strip, jungle ravine, candy-coloured houses.
   Other valid clauses: which dish, which neighborhood, when it's busy, what to order,
   what makes it different.
+- When a cluster shows a `visual_hooks:` line, your `why_specific` MUST quote or
+  paraphrase at least one hook from it. The pre-extraction surfaced these specifically
+  so you don't lose the visual detail in the cluster summary — use them.
 - BANNED words in `why_specific`: stunning, vibrant, breathtaking, scenic, picturesque,
   paradise-like, must-visit, natural beauty, rich culture, something for everyone,
   beautiful landscape, beautiful architecture, beautiful view. Replace with the concrete

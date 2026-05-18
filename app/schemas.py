@@ -53,7 +53,7 @@ class AIDay(BaseModel):
     title: str
     description: str
     highlights: list[str] = Field(..., min_length=2, max_length=5)
-    stops: list[AIStop] = Field(..., min_length=3, max_length=6)
+    stops: list[AIStop] = Field(..., min_length=2, max_length=6)
 
 
 class AIItinerary(BaseModel):

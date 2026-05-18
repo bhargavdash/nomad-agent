@@ -234,3 +234,197 @@ This is exactly the input that the **per-source content strategy spec doc** (AI-
 Run-output artefacts kept under `out/` for AI-7 regression:
 - `out/goa.json`, `out/goa.stderr.log`
 - `out/manali.json`, `out/manali.stderr.log`
+
+---
+
+---
+
+# Sprint 3 AI-7 — Improvement Benchmark
+
+**Date:** 2026-05-17
+**Run by:** end-to-end via `scripts/run_pipeline.py`
+**LLM config:** Groq Llama-3.3-70b-versatile (YouTube, Reddit, Google Blog); Groq Llama-3.3-70b-versatile (Synthesizer — note: switched from Claude Sonnet to Groq for cost; reverts if synthesis quality drops further)
+**Test input:** `samples/rajasthan-december.json` — Rajasthan, India | Dec 1–10 (10 days) | heritage, desert, local cuisine, photography | Balanced pace | $$ | Heritage Haveli
+
+> TL;DR: **The P0 bugs are fixed. The Reddit filter is working. Stats are honest. But the content quality ceiling hasn't moved much** — YouTube still produces thin bodies, Google Blog still uses stock templates, and "Cultural anchor" padding persists because the Python fallback presets weren't updated when the LLM prompt rule was added. Reddit is now contributing 8 relevant discoveries but still zero place-stops in the final itinerary (correctly treated as context, not destinations).
+
+---
+
+## 1. Test input
+
+| Sample | Destination | Dates | Season | Vibes | Pace | Duration |
+|---|---|---|---|---|---|---|
+| `samples/rajasthan-december.json` | Rajasthan, India | 2026-12-01 → 10 (10d) | peak / peak crowd | heritage, desert, local cuisine, photography | Balanced | 10 days |
+
+Signal layer output:
+- Region: india | Season: peak | Crowd: peak | Budget: mid | Pace density: 4 stops/day
+- Active festivals: — | Weather hint: — | Warnings: —
+- Query modifiers include: `peak season`, `best weather`, `less crowded`, `local favorites`, `heritage`, `desert`, `local cuisine`, `photography`
+
+---
+
+## 2. Performance benchmark
+
+### Wall-clock timing (sequential execution)
+
+| Stage | Rajasthan (s) | Goa Sprint 2 (s) | Manali Sprint 2 (s) | Notes |
+|---|---|---|---|---|
+| Signals | <0.01 | <0.01 | <0.01 | Pure Python |
+| **YouTube agent** | **~12** | **18.0** | **11.7** | 4 queries × 15 videos, 54 unique → 30 quality-filtered → 8 clusters → pass2 returned 6 → kept 4. Faster than Goa. |
+| **Reddit agent** | **~48** | **72.5** | **46.1** | 5 queries × 3 subs = 15 pairs. 61 raw posts, 21 dropped off-topic by destination filter, 10 survived, comments enriched, LLM call returned 8. |
+| **Google Blog agent** | **~5** | **5.4** | **5.7** | 3 queries × 5 Tavily results = 15 articles → LLM extracted 8 |
+| **Synthesizer** | **~7** | **5.7** | **6.8** | 10-day trip (vs 7) — slightly more LLM work. 1 attempt, succeeded. |
+| **End-to-end** | **~72 s** | **~100 s** | **~73 s** | Rajasthan is 10 days (43% more) yet faster than Goa due to Reddit destination filter cutting request count |
+
+**Reddit speedup:** The destination-mention filter (`_post_mentions_destination`) drops off-topic posts before comment enrichment. 21 posts dropped = 21 fewer comment-fetch HTTP calls × 2s sleep overhead each. That's the dominant cause of the time reduction vs Sprint 2's Goa run.
+
+### LLM call count per run
+
+| Agent | LLM calls | Notes |
+|---|---|---|
+| YouTube | 3 (2 pass1 batches + 1 pass2) | 1 pass1 batch returned 400 (validation error on empty place_name), 2 succeeded |
+| Reddit | 1 | |
+| Google Blog | 1 | |
+| Synthesizer | 1 | |
+| **Total** | **6** | One fewer than Sprint 2 (Groq 400 on one pass1 batch counted as a failed call, not a retry) |
+
+---
+
+## 3. Discovery yield per agent
+
+| Agent | Rajasthan returned | Quality verdict |
+|---|---|---|
+| YouTube | **4** (from 54 raw, 30 quality-filtered, 8 clusters, pass2=6, kept=4) | 🟡 **Better than Sprint 2** (1→4). Still thin bodies: "A palace in Jaipur, also known as City Palace." Hawa Mahal correctly dropped (vague_phrase). Jaisalmer Fort dropped (short_body=19 chars). |
+| Reddit | **8** (from 61 raw, 21 off-topic dropped, 10 filtered, extracted=8, kept=8) | 🟢 **Massive improvement over Sprint 2** (3→8). All 8 are Rajasthan-specific: kidney stone risk, water quality, tourist prices, elephant tourism ethics, train class, Udaipur rec, pharma safety, rural hospitality. Destination filter is working. |
+| Google Blog | **8** (from 15 articles → LLM extracted 8) | 🟡 **Same quality as Sprint 2** — content bodies still stock-template style. "Lake city with a mix of Rajput and Mughal architecture, and scenic views. Best for: romance, history enthusiasts." No restaurant details, no architect names, no pairing suggestions. |
+
+### Final itinerary stop source breakdown
+
+| Destination | Total stops | youtube | reddit | blog | **maps (padding)** |
+|---|---|---|---|---|---|
+| Rajasthan (Sprint 3) | 30 | 2 (7%) | **0 (0%)** | 7 (23%) | **21 (70%)** |
+| Goa (Sprint 2) | 23 | 1 (4%) | 0 (0%) | 5 (22%) | 17 (74%) |
+| Manali (Sprint 2) | 24 | 1 (4%) | 0 (0%) | 7 (29%) | 16 (67%) |
+
+Reddit still contributes 0 place-stops. This is now **correct behavior** — the 8 Reddit discoveries are warnings and tips (kidney stone risk, water quality) that the synthesizer correctly surfaces in day *descriptions* rather than inventing a place called "Rajasthan kidney stone risk". The source integrity is better; the padding rate is essentially unchanged.
+
+---
+
+## 4. Bugs fixed vs Sprint 2
+
+### ✅ FIXED — P0: Chronological ordering bug
+
+Sprint 2 `BENCHMARK.md §6` identified five out-of-order stops across Goa + Manali.
+
+**Rajasthan run:** Zero chronological violations across all 10 days and 30 stops. Day 10 has "2:00 PM Cultural anchor → 2:30 PM Departure" — 30-minute gap is close but technically correct (2:00 before 2:30). Fix confirmed: `_resort_stops_chronologically()` with `_time_to_minutes()` in `synthesizer.py` works correctly.
+
+### ✅ FIXED — P1: `stats_places` over-count
+
+Sprint 2 Goa: `stats_places=22` despite only 6 real places.
+
+**Rajasthan run:** `stats_places=9` — correctly counts only non-maps stops (2 youtube + 7 blog = 9). With 21 maps stops out of 30 total, the honest count is 9 not 30. Fix confirmed: `_compute_stats()` now excludes `source="maps"` stops.
+
+### ✅ FIXED — P2: `stats_tips` misleading count
+
+Sprint 2 Goa: `stats_tips=5` badge but 0 tips actually referenced as stops.
+
+**Rajasthan run:** `stats_tips=0` — 8 Reddit warning/tip discoveries found but none are referenced as place-stops (correct). No phantom tip badge. Fix confirmed: count only discoveries referenced by an actual stop.
+
+### ✅ FIXED — P1: Warnings not surfaced in itinerary
+
+Sprint 2 Manali: monsoon landslide/road-closure warnings generated by signals layer but never appeared in the itinerary.
+
+**Rajasthan run:** Day 1 description: *"Be mindful of dehydration and drink plenty of water, as Rajasthan is part of the 'kidney stone belt' in India."* Day 3 description: *"Be mindful of the water quality in Rajasthan."* These warnings came directly from Reddit discoveries and were surfaced via the synthesizer prompt Rule 8 (`WARNINGS SURFACING`). Fix confirmed.
+
+### ✅ IMPROVED — Reddit destination-mention filter
+
+Sprint 2: Reddit returned pan-India content (RPO Chandigarh passport surrender, monsoon onset over India) for a Manali query.
+
+**Rajasthan run:** 21 of 61 raw posts (34%) dropped by `_post_mentions_destination()` before LLM. The 10 surviving posts yielded 8 genuine Rajasthan-specific discoveries. Filter is working; false-positive rate (wrongly dropped on-topic posts) unknown but output quality is clearly higher.
+
+### ✅ IMPROVED — YouTube pass-2 yield: 1 → 4 places
+
+Sprint 2: 52 raw videos → 1 place returned (93% drop in pass-2).
+
+**Rajasthan run:** 54 raw videos → 4 places returned (33% drop in pass-2). Still below the AI-7 target of 5-8, but meaningfully better. Two drops were correct: "Hawa Mahal" (vague_phrase match: "beautiful place") and "Jaisalmer Fort" (short_body: 19 chars). The quality gate is doing its job.
+
+---
+
+## 5. Bugs confirmed NOT fixed / newly observed
+
+### 🔴 R1 — "Cultural anchor" still appears in padding output (7 of 30 stops)
+
+The synthesizer prompt (Rule 3) explicitly says *"NOT a generic label like 'Cultural anchor'"*, but `_default_anchor_stop()` in `synthesizer.py` still has `"Cultural anchor"` as `presets[2]`. When the LLM delivers <3 stops for a day, Python padding fires and inserts "Cultural anchor" at 2:00 PM regardless. Affects Days 3, 5, 6, 7, 8, 9, 10.
+
+**Root cause:** The LLM prompt rule and the Python fallback presets are out of sync. Prompt was updated; fallback presets were not.
+
+**Fix (< 15 min):** Replace `"Cultural anchor"` in `_default_anchor_stop` `presets[2]` with a more concrete named anchor like `"Old City exploration"` or simply remove the preset and derive it from the trip destination. Also rename the other generic presets ("Neighborhood walk" → `"Bazaar walk"` or similar).
+
+### 🟠 R2 — Day 5 (Jaisalmer Day 2) is entirely maps padded
+
+The synthesizer exhausted Jaisalmer blog/YouTube candidates after Day 4. Day 5 has 3 maps-only stops: Neighborhood walk → Cultural anchor → Exploring the Havelis. The synthesizer should have recognised it had no more Jaisalmer material and either (a) tightened to fewer stops, or (b) borrowed a discovery from another city's overflow. This is the "synthesizer should allow fewer stops when research is thin" principle from AI-7, not yet fully implemented — the target was made an upper bound, but padding still fills to the minimum (3).
+
+### 🟠 R3 — Google Blog body quality unchanged
+
+All 8 blog discoveries follow the same template: `"<Place> with <generic_description>. Best for: <audience>."` No restaurant cuisine types, no architect names, no specific trek grades. This was the AI-7 P1 fix target ("demand named entities; reject template phrases") — appears not yet applied.
+
+### 🟡 R4 — YouTube bodies are thin but improving
+
+Bodies like "A palace in Jaipur, also known as City Palace" and "A fort in Jaipur, also known as Amer Fort" give the synthesizer no visual or contextual detail to write rich stop descriptions from. The AI-7 fix (carry visual descriptors through pass-1 → pass-2) appears partially applied (4 places vs 1 is a win) but body richness is unchanged.
+
+### 🟡 R5 — `r/rajasthan` subreddit not in destination map
+
+`_DESTINATION_SUBREDDIT_MAP` has `"rajasthan": ["IndiaTravel"]` but not `r/rajasthan` (which exists and has ~40k members). The agent defaulted to `r/travel`, `r/solotravel`, `r/india`, `r/IndiaTravel`. Adding `r/rajasthan` would materially improve recall for Rajasthan-specific content.
+
+---
+
+## 6. Destination differentiation — does Rajasthan feel distinct?
+
+| Aspect | Rajasthan (Sprint 3) | Differentiated from Goa/Manali? |
+|---|---|---|
+| Emoji | 🏰 | ✅ |
+| Multi-city routing | Jaipur → Jodhpur → Jaisalmer → Udaipur → Pushkar → Ranthambore | ✅ Synthesizer correctly distributed 10 days across 6 sub-cities |
+| Day 1 warning | Kidney stone belt mention | ✅ Reddit-sourced, unique to Rajasthan |
+| Activities | Forts, palaces, desert safari, wildlife, stepwells | ✅ No beach or monsoon content |
+| Vibe alignment | heritage → forts/palaces; photography → no specific photo-stop surfaced | ⚠️ Photography vibe not reflected in YouTube content (thin bodies) |
+| December signal | Season=peak, crowd=peak, query modifiers include "less crowded" | ✅ Signal correctly characterised |
+| Festival signal | No active festivals (correct — Pushkar Camel Fair is October/November) | ✅ |
+
+---
+
+## 7. Honest verdict — Sprint 3
+
+**Pipeline correctness: 9/10** (unchanged). 10 days, valid JSON, no crashes, every stop traceable.
+
+**Itinerary usability: 5/10** (up from 4/10 in Sprint 2). Improvements: warnings surfaced in day descriptions, multi-city routing works for a 10-day trip, stats are honest. Regressions: none new. Ceiling: still 70% maps padding, still "Cultural anchor" filler.
+
+**Source-of-truth integrity: 8/10** (up from 6/10). `stats_places` and `stats_tips` are now honest counts. Reddit filter removes off-topic content before LLM. No phantom tip badges.
+
+**Reddit relevance: 8/10** (up from 2/10 in Sprint 2). Destination filter is the single biggest quality win. 8 Rajasthan-specific discoveries vs 0 useful ones for Manali.
+
+**YouTube depth: 4/10** (up from 2/10). 4 places vs 1 is meaningful. Bodies are still too thin for the synthesizer to write rich stop descriptions.
+
+**Google Blog depth: 3/10** (unchanged). Template bodies, no named entities beyond place name.
+
+---
+
+## 8. Priority order for next sprint
+
+1. **Fix `_default_anchor_stop` presets** — replace "Cultural anchor" with named concrete stops; sync with the LLM prompt rule already in place. (P0, < 15 min)
+2. **Add `r/rajasthan` to subreddit map** — and audit other missing destination-specific subs. (P1, < 30 min)
+3. **Google Blog: demand named entities in prompt** — cuisine, architect, trek difficulty. Regex-reject "Best for:" template phrases. (P1, ~1 hr)
+4. **YouTube: carry visual descriptors through pass-1 → pass-2** — stop discarding quote/visual data in cluster summaries. (P1, ~2 hr)
+5. **Synthesizer: allow 0-stop days / shorter days when research is genuinely exhausted** — don't fill Day 5 with 3 generic maps stops when there's no Jaisalmer material left. (P2, ~1 hr)
+6. **OpenStreetMap Overpass POI enrichment** — geographic clustering rather than LLM guessing from place names. Deferred from AI-7. (P3, ~4 hr)
+
+---
+
+## 9. Run artefacts
+
+- `samples/rajasthan-december.json` — test input
+- `out/rajasthan.json` — final AIItinerary JSON
+- `out/rajasthan.stderr.log` — full stage-by-stage pipeline log
+
+Regression fixtures (Sprint 2):
+- `out/goa.json`, `out/goa.stderr.log`
+- `out/manali.json`, `out/manali.stderr.log`

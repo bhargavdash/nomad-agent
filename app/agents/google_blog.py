@@ -70,6 +70,7 @@ _VAGUE_PHRASE_RE = re.compile(
     r"|\bworld[-\s]?class\b"
     r"|\bunique\s+experience\b"
     r"|\bbeautiful\s+(?:beaches?|landscapes?|architectures?|views?|scenery|places?)\b"
+    r"|\b(?:with|featuring)\s+(?:scenic|beautiful|stunning)\s+views?\b"
     r"|\bwonderful\s+destination\b"
     r"|\bamazing\s+(?:place|destination|experience|views?)\b",
     re.IGNORECASE,
@@ -84,7 +85,14 @@ _BLOG_TEMPLATE_RE = re.compile(
     r"|\bperfect\s+(?:place|spot)\s+for\s+everyone\b"
     r"|\bwhere\s+to\s+(?:go|eat|stay|shop)(?:\s*,\s*(?:go|eat|stay|shop))+\b"
     r"|\bbest\s+for\s+(?:everyone|all|families\s+and\s+couples)\b"
-    r"|\bguide\s+that\s+includes\s+(?:where|what)\s+to\s+(?:go|eat|stay|shop)\b",
+    r"|\bguide\s+that\s+includes\s+(?:where|what)\s+to\s+(?:go|eat|stay|shop)\b"
+    r"|\bpart\s+of\s+a\s+travel\s+guide\b"
+    # "Best for: <audience>" template bleeding from the `best_for` field into the
+    # description. The `best_for` field exists for this exact content — when it
+    # appears inline, the description is structurally a stub.
+    r"|\bbest\s+for[:\s]\s*\w+"
+    # "A <noun> to visit in <place>," / "An <noun> in <place>," openers.
+    r"|^(?:A|An)\s+\w+\s+(?:to\s+visit\s+in|in)\s+\w+,",
     re.IGNORECASE,
 )
 
@@ -349,6 +357,12 @@ GOOD example (fort with dynasty / era):
   "description": "Hilltop sandstone fort founded 1459 by Rao Jodha, with seven gates and a museum of Marwar royal palanquins and Rajput weaponry; the Phool Mahal hall has 19th-century gold-leaf ceiling work.",
   ...
 }
+
+REJECTION → REWRITE (illustrates what we drop and what we keep):
+  ❌ DROP — stock template, no entity beyond place name:
+     "Lake city with a mix of Rajput and Mughal architecture, and scenic views. Best for: romance, history enthusiasts."
+  ✅ KEEP — names entity (dynasty + builder + photo spot), gives logistics hook:
+     "Udaipur's City Palace — Mewar-dynasty Rajput-Mughal hybrid started 1559 under Maharana Udai Singh II; the Sheesh Mahal mirror room is the photo spot. Pair with a sunset boat ride on Lake Pichola."
 
 OUTPUT: JSON {"places": [...]}. TARGET 5-8. Returning 0 from a 10-article batch is failure — re-read and extract what's there."""
 
