@@ -15,10 +15,14 @@ Why this layer exists:
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date
+from typing import Literal
 
 from app.schemas import TripParams
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -564,6 +568,190 @@ def extract_signals(trip_params: TripParams) -> TravelSignals:
         budget_tier=budget_tier,
         pace_density=pace_density,
         vibe_source_weights=vibe_source_weights,
+        query_modifiers=query_modifiers,
+        warnings=warnings,
+    )
+
+
+# ---------------------------------------------------------------------------
+# LLM fallback for unknown destinations
+#
+# The keyword-based _REGION_KEYWORDS map covers ~76 popular destinations but
+# users can pick any destination on Earth. When the map misses, region falls
+# back to "unknown" which causes season inference to degrade to Northern-
+# Hemisphere defaults — wrong for half the globe. This enrichment fires only
+# on the unknown path, makes one cheap LLM call, and caches the result per
+# destination so repeated runs don't re-pay the cost.
+# ---------------------------------------------------------------------------
+
+_LLM_REGION_CACHE: dict[str, "_DestinationClassification"] = {}
+
+# Regions the keyword map already understands. The LLM is asked to map to one
+# of these when possible so the existing _infer_season rules apply directly.
+_KNOWN_REGIONS = frozenset(
+    {"india", "southeast_asia", "europe", "north_america", "oceania"}
+)
+
+
+@dataclass(frozen=True)
+class _DestinationClassification:
+    region: str
+    hemisphere: Literal["north", "south"]
+
+
+def _infer_season_with_hemisphere(
+    month: int | None,
+    region: str,
+    destination_lower: str,
+    hemisphere: Literal["north", "south"],
+) -> tuple[str, str | None, list[str]]:
+    """Like `_infer_season` but uses hemisphere for unknown-region destinations.
+
+    Known regions (india/southeast_asia/europe/north_america/oceania) keep
+    their specific rules. For everything else (south_america, africa, etc.),
+    fall back to generic 4-quarter buckets, inverted in the south.
+    """
+    if region in _KNOWN_REGIONS:
+        return _infer_season(month, region, destination_lower)
+    if month is None:
+        return "unknown", None, []
+    if hemisphere == "south":
+        if month in (6, 7, 8):
+            return "winter", None, ["winter"]
+        if month in (9, 10, 11):
+            return "spring", None, ["spring"]
+        if month in (12, 1, 2):
+            return "summer", None, ["summer"]
+        return "autumn", None, ["autumn"]
+    # North (default)
+    if month in (12, 1, 2):
+        return "winter", None, ["winter"]
+    if month in (3, 4, 5):
+        return "spring", None, ["spring"]
+    if month in (6, 7, 8):
+        return "summer", None, ["summer"]
+    return "autumn", None, ["autumn"]
+
+
+async def _classify_destination_via_llm(
+    destination: str,
+) -> _DestinationClassification | None:
+    """One small LLM call returning {region, hemisphere}. None on failure.
+
+    Restricts region to the known set when possible; the LLM may also return
+    "south_america", "africa", "middle_east" for destinations that don't fit
+    the existing buckets — hemisphere then drives season fallback.
+    """
+    from pydantic import BaseModel, Field
+
+    from app.llm.factory import get_llm
+
+    class _Classification(BaseModel):
+        region: Literal[
+            "india",
+            "southeast_asia",
+            "europe",
+            "north_america",
+            "oceania",
+            "south_america",
+            "africa",
+            "middle_east",
+        ] = Field(..., description="Macro-region this destination belongs to.")
+        hemisphere: Literal["north", "south"] = Field(
+            ..., description="Climate hemisphere — drives seasonal inference."
+        )
+
+    system = (
+        "You classify travel destinations by region and hemisphere so a "
+        "travel-planning system can pick the right seasonal rules. "
+        "Output JSON only with keys exactly 'region' and 'hemisphere'."
+    )
+    user = (
+        f"Destination: {destination}\n\n"
+        "Pick the region (key 'region') from one of: india, southeast_asia, "
+        "europe, north_america, oceania, south_america, africa, middle_east. "
+        "Use the closest fit. Hemisphere (key 'hemisphere') is 'north' or 'south'."
+    )
+    try:
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        llm = get_llm("signals_classifier")
+        try:
+            structured = llm.with_structured_output(_Classification, method="json_mode")
+        except Exception:  # noqa: BLE001
+            structured = llm.with_structured_output(_Classification)
+        result = await structured.ainvoke(
+            [SystemMessage(content=system), HumanMessage(content=user)]
+        )
+        if not isinstance(result, _Classification):
+            result = _Classification.model_validate(result)
+        return _DestinationClassification(
+            region=result.region, hemisphere=result.hemisphere
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning(
+            "signals.llm_classifier_failed dest=%r err=%s", destination, e
+        )
+        return None
+
+
+async def enrich_signals_with_llm(
+    signals: TravelSignals, trip_params: TripParams
+) -> TravelSignals:
+    """If `signals.region` is "unknown", call the LLM classifier to fill in
+    region + season + warnings + query_modifiers correctly.
+
+    No-op when region is already known. Cached in-process so repeated runs
+    on the same destination don't re-pay the LLM cost. Failures degrade
+    silently — returns the original signals.
+    """
+    if signals.region != "unknown":
+        return signals
+
+    dest_key = trip_params.destination.strip().lower()
+    if not dest_key:
+        return signals
+
+    classification = _LLM_REGION_CACHE.get(dest_key)
+    if classification is None:
+        classification = await _classify_destination_via_llm(trip_params.destination)
+        if classification is None:
+            return signals
+        _LLM_REGION_CACHE[dest_key] = classification
+
+    month = _midpoint_month(trip_params.date_from, trip_params.date_to)
+    season, weather_hint, season_modifiers = _infer_season_with_hemisphere(
+        month, classification.region, dest_key, classification.hemisphere
+    )
+
+    festivals = _find_active_festivals(
+        dest_key, trip_params.date_from, trip_params.date_to
+    )
+    crowd_level = _crowd_level(season, festivals)
+    query_modifiers = _build_query_modifiers(
+        season_modifiers, season, crowd_level, festivals, trip_params.vibes
+    )
+    warnings = _build_warnings(season, classification.region, dest_key, weather_hint)
+
+    logger.info(
+        "signals.llm_enriched dest=%r region=%s hemisphere=%s season=%s",
+        trip_params.destination,
+        classification.region,
+        classification.hemisphere,
+        season,
+    )
+
+    return TravelSignals(
+        region=classification.region,
+        season=season,
+        weather_hint=weather_hint,
+        is_festival_window=signals.is_festival_window,
+        festival_name=signals.festival_name,
+        active_festivals=signals.active_festivals,
+        crowd_level=crowd_level,
+        budget_tier=signals.budget_tier,
+        pace_density=signals.pace_density,
+        vibe_source_weights=signals.vibe_source_weights,
         query_modifiers=query_modifiers,
         warnings=warnings,
     )

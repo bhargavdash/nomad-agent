@@ -1,0 +1,14 @@
+{
+  "trip_id": "00000000-0000-0000-0000-000000000040",
+  "user_id": "00000000-0000-0000-0000-0000000000aa",
+  "destination": "Singapore",
+  "date_from": "2026-06-12",
+  "date_to": "2026-06-15",
+  "duration_days": 4,
+  "travelers": "2",
+  "vibes": ["food", "skyline", "modern architecture", "shopping"],
+  "accommodation": "Boutique Hotel",
+  "pace": "Action-Packed",
+  "budget": "$$$",
+  "preferences": "Love hawker centres, rooftop bars, and futuristic landmarks. Want to see Marina Bay, Gardens by the Bay, Sentosa, and authentic Singaporean food beyond chain restaurants."
+}

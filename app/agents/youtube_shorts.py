@@ -62,8 +62,11 @@ PASS1_BATCH_SIZE = 6              # videos per Pass-1 LLM call (3 calls for 18 v
 MAX_MENTIONS_PER_VIDEO = 4        # cap per-video place mentions to avoid spam
 MAX_CLUSTERS_FOR_PASS2 = 14       # top clusters by mention-count fed to Pass 2
 
-# Listicle / clickbait title patterns. Ranked by how reliably the format
-# corresponds to generic SEO content with no concrete place mentions.
+# Listicle / clickbait title patterns. Used as a SOFT RANKING SIGNAL —
+# listicle videos are pushed to the bottom of the candidate pool but not
+# dropped, because tourist-anchor content (e.g. "Top 10 Singapore attractions —
+# Sentosa, Universal Studios, SEA Aquarium") lives in titles that match this
+# pattern. Dropping wholesale created a blindspot for must-see attractions.
 LISTICLE_TITLE_RE = re.compile(
     r"\btop\s*\d+\b"
     r"|\bbest\s*\d+\b"
@@ -75,6 +78,11 @@ LISTICLE_TITLE_RE = re.compile(
     r"|\byou\s+must\b",
     re.IGNORECASE,
 )
+
+# Per-channel cap: how many videos from the same channel can survive the
+# quality filter. Raised from 1 → 2 so a major-attraction tourism channel
+# and an authentic creator's vlog can both contribute from the same source.
+MAX_VIDEOS_PER_CHANNEL = 2
 
 # Vagueness blacklist (Layer 2d). Applied to LLM body output. If a discovery
 # body matches any of these phrases, it is dropped — even if the LLM thought
@@ -242,7 +250,14 @@ def _build_queries(trip_params: TripParams, signals: TravelSignals) -> list[str]
     # Q2 (always): food vertical — universal, often produces concrete dish/restaurant names.
     queries.append(f"{dest} food")
 
-    # Q3: first user vibe if given, else generic discovery prompt.
+    # Q3 (always): anchor / must-see coverage. Surfaces the famous attractions
+    # every visitor expects (Sentosa, Universal Studios, Marina Bay Sands, etc.).
+    # Sprint 4 benchmark showed the previous "{dest} hidden places" slot
+    # systematically biased away from these — anchors and hidden gems must
+    # coexist, not displace each other.
+    queries.append(f"top things to do in {dest}")
+
+    # Q4: first user vibe if given, else generic discovery prompt.
     if trip_params.vibes:
         first_vibe = trip_params.vibes[0].strip()
         if first_vibe:
@@ -250,13 +265,10 @@ def _build_queries(trip_params: TripParams, signals: TravelSignals) -> list[str]
     elif len(queries) < 5:
         queries.append(f"things to do in {dest}")
 
-    # Q4: season — only if it's an informative bucket. Skip generic/unknown buckets.
+    # Q5: season — only if it's an informative bucket. Skip generic/unknown buckets.
     informative_seasons = {"winter", "summer", "monsoon", "autumn", "spring"}
     if signals.season in informative_seasons:
         queries.append(f"{dest} {signals.season}")
-
-    # Q5 (always): offbeat angle — biases away from listicles, toward niche creators.
-    queries.append(f"{dest} hidden places")
 
     # Dedupe while preserving order; cap at 5 queries / agent run.
     seen: set[str] = set()
@@ -305,24 +317,35 @@ def _passes_engagement(s: YouTubeShort) -> bool:
 
 
 def _filter_quality(shorts: list[YouTubeShort]) -> list[YouTubeShort]:
-    """Apply listicle, engagement, and per-channel-best filters."""
+    """Apply engagement floor + per-channel cap. Listicle videos are kept but
+    deprioritized so anchor content surfaces alongside niche creator content.
+    """
     survivors: list[YouTubeShort] = []
     for s in shorts:
-        if _is_listicle(s.title):
-            continue
         if not _passes_engagement(s):
             continue
         survivors.append(s)
 
-    # Keep best Short per channel by view count (proxy for quality).
-    by_channel: dict[str, YouTubeShort] = {}
-    for s in survivors:
-        existing = by_channel.get(s.channel_title)
-        if existing is None or s.view_count > existing.view_count:
-            by_channel[s.channel_title] = s
+    # Keep up to MAX_VIDEOS_PER_CHANNEL best Shorts per channel by view count.
+    # Allowing 2 per channel lets a major-attraction tourism channel and an
+    # authentic vlog creator's channel both contribute, instead of collapsing
+    # to one video per channel which over-favored small creators in Sprint 4.
+    by_channel: dict[str, list[YouTubeShort]] = {}
+    for s in sorted(survivors, key=lambda x: x.view_count, reverse=True):
+        bucket = by_channel.setdefault(s.channel_title, [])
+        if len(bucket) < MAX_VIDEOS_PER_CHANNEL:
+            bucket.append(s)
+    flat: list[YouTubeShort] = [s for bucket in by_channel.values() for s in bucket]
 
-    deduped = sorted(by_channel.values(), key=lambda s: s.view_count, reverse=True)
-    return deduped[:MAX_DEDUPED_CANDIDATES]
+    # Deprioritize (not drop) listicle videos: rank them after non-listicle
+    # within the same view-count tier. Anchor-style "Top 10 in {dest}" videos
+    # still survive — they're the only way to surface famous landmarks the
+    # niche-creator videos won't name.
+    flat.sort(
+        key=lambda s: (0 if _is_listicle(s.title) else 1, s.view_count),
+        reverse=True,
+    )
+    return flat[:MAX_DEDUPED_CANDIDATES]
 
 
 # ---------------------------------------------------------------------------

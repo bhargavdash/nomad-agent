@@ -32,7 +32,7 @@ from app.agents.synthesizer import run_synthesizer
 from app.agents.youtube_longform import run_youtube_longform_agent
 from app.agents.youtube_shorts import run_youtube_agent
 from app.schemas import AIItinerary, ResearchDiscovery, TripParams
-from app.signals import TravelSignals, extract_signals
+from app.signals import TravelSignals, enrich_signals_with_llm, extract_signals
 
 
 class PipelineState(TypedDict, total=False):
@@ -52,6 +52,7 @@ class PipelineState(TypedDict, total=False):
 
 async def signal_node(state: PipelineState) -> dict[str, Any]:
     signals = extract_signals(state["trip_params"])
+    signals = await enrich_signals_with_llm(signals, state["trip_params"])
     return {"signals": signals}
 
 

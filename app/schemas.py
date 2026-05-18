@@ -9,6 +9,10 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 SourceType = Literal["youtube", "reddit", "blog", "maps"]
+# Note: "maps" is the wire value for synthesizer-padded anchor stops (NOT a
+# Google Maps fact). The name is preserved here only because it is mirrored
+# in nomad-api's Zod schema and possibly the Postgres check constraint;
+# renaming requires a coordinated Node-side change.
 
 
 class TripParams(BaseModel):

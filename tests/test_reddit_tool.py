@@ -145,7 +145,7 @@ async def test_search_reddit_hits_correct_endpoint(monkeypatch) -> None:
                                 "permalink": "/r/goa/comments/p1/x/",
                                 "url": "https://reddit.com/x",
                                 "author": "u",
-                                "created_utc": 1.0,
+                                "created_utc": 1735689600.0,  # 2025-01-01, fresh enough for the age filter
                             }
                         }
                     ]
@@ -206,7 +206,7 @@ async def test_search_reddit_falls_back_to_old_reddit_on_403(monkeypatch) -> Non
                                     "permalink": "/r/travel/comments/p1/x/",
                                     "url": "https://reddit.com/x",
                                     "author": "u",
-                                    "created_utc": 1.0,
+                                    "created_utc": 1735689600.0,  # 2025-01-01, fresh enough for the age filter
                                 }
                             }
                         ]

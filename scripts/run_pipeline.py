@@ -51,7 +51,7 @@ from app.agents.reddit import run_reddit_agent  # noqa: E402
 from app.agents.synthesizer import run_synthesizer  # noqa: E402
 from app.agents.youtube_shorts import run_youtube_agent  # noqa: E402
 from app.schemas import ResearchDiscovery, TripParams  # noqa: E402
-from app.signals import extract_signals  # noqa: E402
+from app.signals import enrich_signals_with_llm, extract_signals  # noqa: E402
 
 
 SAMPLES_DIR = ROOT / "samples"
@@ -138,8 +138,9 @@ async def run_pipeline_sequential(trip: TripParams) -> dict:
         file=sys.stderr,
     )
 
-    _banner("Stage 1 — Signals (pure Python, no LLM)")
+    _banner("Stage 1 — Signals (pure Python + LLM fallback when region unknown)")
     signals = extract_signals(trip)
+    signals = await enrich_signals_with_llm(signals, trip)
     print(
         f"Region          : {signals.region}\n"
         f"Season          : {signals.season}\n"

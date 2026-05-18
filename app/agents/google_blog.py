@@ -240,28 +240,33 @@ class _BlogExtractionResult(BaseModel):
 
 
 def _build_queries(trip_params: TripParams, signals: TravelSignals) -> list[str]:
-    """Return 3–4 Tavily queries shaped by destination, season, vibes, and budget.
+    """Return 3–4 Tavily queries shaped by destination, vibes, and budget.
 
     Queries are kept clean (no `-site:` syntax) because Tavily's
-    `exclude_domains` handles filtering. Season and vibe are woven in so
-    Tavily's re-ranking surfaces the most relevant blog posts.
+    `exclude_domains` handles filtering. Q1+Q2 cover the must-see anchors
+    so famous attractions (Sentosa, Eiffel Tower, etc.) surface; Q3+Q4
+    cover vibe/budget personalization. Festival/season context is conveyed
+    to the LLM via the user message, not the queries.
     """
     dest = trip_params.destination.strip()
     queries: list[str] = []
 
-    # Q1 (always): season-aware travel guide — broadest, best blog coverage.
-    if signals.season not in {"unknown"}:
-        queries.append(f"best {dest} {signals.season} travel guide")
-    else:
-        queries.append(f"best {dest} travel guide")
+    # Q1 (always): anchor / must-see coverage. Sprint 4 benchmark showed
+    # Singapore missed Sentosa / Universal / SEA Aquarium because the prior
+    # season-aware query never specifically asked for top attractions.
+    queries.append(f"top attractions in {dest}")
 
-    # Q2: first vibe if given — surfaces niche blog content matching user intent.
+    # Q2 (always): second anchor angle — different phrasing surfaces a
+    # different mix of editorial sources.
+    queries.append(f"must see {dest}")
+
+    # Q3: first vibe if given — surfaces niche blog content matching user intent.
     if trip_params.vibes:
         first_vibe = trip_params.vibes[0].strip()
         if first_vibe:
             queries.append(f"{dest} {first_vibe} travel tips")
 
-    # Q3: budget-aware. Luxury → hotel/restaurant recs; shoestring → budget tips.
+    # Q4: budget-aware. Luxury → hotel/restaurant recs; shoestring → budget tips.
     if signals.budget_tier == "luxury":
         queries.append(f"{dest} luxury hotels restaurants experiences")
     elif signals.budget_tier == "shoestring":
@@ -269,10 +274,6 @@ def _build_queries(trip_params: TripParams, signals: TravelSignals) -> list[str]
     else:
         # Mid/premium → general "things to do" or itinerary angle.
         queries.append(f"{dest} itinerary things to do")
-
-    # Q4: festival-specific query (only when festival is active during the trip).
-    if signals.active_festivals and len(queries) < MAX_QUERIES:
-        queries.append(f"{dest} {signals.active_festivals[0]} guide")
 
     # Dedupe while preserving order.
     seen: set[str] = set()

@@ -269,9 +269,25 @@ so the traveler sees the risk before planning.
 evening). The downstream system re-sorts defensively, but emit them in order \
 so the day narrative reads correctly.
 
+10. ANCHOR COVERAGE. If the destination has well-known must-see attractions \
+(famous theme parks, iconic landmarks, world-renowned museums, signature \
+districts) and any of them appear in the research candidates, INCLUDE them \
+in the itinerary. Hidden gems are valuable, but they must NOT displace the \
+anchors every visitor expects. Example: for Singapore, do not omit Sentosa \
+Island, Universal Studios, or S.E.A. Aquarium in favor of niche cafés if the \
+research lists them. A "hidden gems only" itinerary that misses the famous \
+sights is a worse traveler experience, not a better one.
+
+11. SOURCE FRESHNESS. Prefer candidates whose source content is recent. If a \
+discovery's evidence comes from a Reddit post older than 3 years or a blog \
+older than 2 years, treat it as a CANDIDATE SIGNAL — not a guaranteed fact. \
+Be cautious citing specific prices, opening hours, or "still open" claims \
+from old sources. When multiple converging sources support a recommendation, \
+prefer it over a single dated mention.
+
 VOICE RULES (the itinerary must not read like an LLM wrote it):
 
-10. TONE. Write as a knowledgeable friend who has been there. Concrete, \
+12. TONE. Write as a knowledgeable friend who has been there. Concrete, \
 opinionated, second-person ("you'll want to…", "skip if you're not into…", \
 "go early — the courtyard gets mobbed by 11"). NOT travel-brochure voice. NOT \
 corporate. NOT a bulleted list of facts. NEVER use the words "beautiful", \
@@ -279,13 +295,13 @@ corporate. NOT a bulleted list of facts. NEVER use the words "beautiful", \
 everyone", "world-class", "rich history" — replace them with the specific \
 detail they were hiding.
 
-11. DAY DESCRIPTION = NARRATIVE. Each day's `description` must read as a 1-3 \
+13. DAY DESCRIPTION = NARRATIVE. Each day's `description` must read as a 1-3 \
 sentence CONNECTED narrative of how the day flows — use linking words like \
 "start", "then", "after", "before", "wind down" to chain the day's actual \
 stops together. NOT a list of activities. NOT "today you will visit X, Y, \
 and Z."
 
-12. NO USE-CASE FRAMING in stop names. Stop `name` is a CONCRETE PROPER NOUN: \
+14. NO USE-CASE FRAMING in stop names. Stop `name` is a CONCRETE PROPER NOUN: \
 a place name, a restaurant name, a named viewpoint, a named market, a named \
 neighbourhood. BANNED stop names (these are filler, never emit them): "Lunch \
 at a cultural place", "Lunch at a local eatery", "Cultural anchor", "Cultural \
@@ -295,18 +311,18 @@ viewpoint" (without a name), "Evening stroll", "Dinner spot" (without a name), \
 "Standard anchor". If you have no candidate for a slot, name a specific known \
 spot of the day's city.
 
-13. STOP DESCRIPTIONS ARE OPINIONATED + SPECIFIC. Quote the candidate body's \
+15. STOP DESCRIPTIONS ARE OPINIONATED + SPECIFIC. Quote the candidate body's \
 concrete details directly: signature dish, architect/dynasty/era, trek grade, \
 opening time, photo-spot location, what to order, when to arrive. Add a hint \
 of insider voice (a timing tip, a what-to-skip).
 
-14. VIBES MUST SHOW. Every day's `description` must reflect at least one of \
+16. VIBES MUST SHOW. Every day's `description` must reflect at least one of \
 the trip's `vibes` — but as a SPECIFIC detail, not the bare word: heritage → \
 name an architect/dynasty/era; photography → mention the light or time of day; \
 food → name the dish; nightlife → name the club/bar + door time; adventure → \
 name the trail/grade/distance; beaches → name the beach.
 
-15. BUDGET MUST MATCH. Restaurants, bars, and stays must match the trip's \
+17. BUDGET MUST MATCH. Restaurants, bars, and stays must match the trip's \
 `Budget tier` from the Signal summary: \
 shoestring/$ = street stalls, dhabas, hostels, dorms; \
 mid/$$ = mid-range cafés, family restaurants, heritage homestays, boutique \

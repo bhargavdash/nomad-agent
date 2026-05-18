@@ -22,6 +22,10 @@ def _resolve_role(role: str) -> tuple[str, str]:
         "reddit_agent": (settings.LLM_REDDIT_PROVIDER, settings.LLM_REDDIT_MODEL),
         "google_agent": (settings.LLM_GOOGLE_PROVIDER, settings.LLM_GOOGLE_MODEL),
         "synthesizer": (settings.LLM_SYNTH_PROVIDER, settings.LLM_SYNTH_MODEL),
+        "signals_classifier": (
+            settings.LLM_SIGNALS_CLASSIFIER_PROVIDER,
+            settings.LLM_SIGNALS_CLASSIFIER_MODEL,
+        ),
     }
     if role not in mapping:
         raise ValueError(
@@ -34,7 +38,7 @@ def get_llm(role: str) -> BaseChatModel:
     """Return a configured LangChain chat model for the given agent role.
 
     role: one of "youtube_agent" | "youtube_longform_agent" | "reddit_agent"
-          | "google_agent" | "synthesizer".
+          | "google_agent" | "synthesizer" | "signals_classifier".
     """
     provider, model = _resolve_role(role)
     provider = provider.lower()
