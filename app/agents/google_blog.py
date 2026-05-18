@@ -1,20 +1,530 @@
-"""GoogleBlogAgent — STUB.
+"""GoogleBlogAgent — curated travel blog insights via Tavily Search.
 
-Strategy (from AI_INTEGRATION_PLAN.md §4.3):
-  • Tool: Tavily Search API (free 1000 queries/month, AI-ready summaries).
-  • Query: "best places ${destination} ${season} ${vibes}" with
-    -tripadvisor.com -reddit.com to avoid double-covering sources.
-  • Tavily returns top 5 articles with summaries.
-  • Extract recommendations via LLM. Tag "blog" unless specifically a
-    Google-Maps top-rated tourist anchor → "maps".
-  • Travel blogs are best at curated lists w/ reasoning, historical/
-    cultural context, logistics & itinerary suggestions.
+Why blogs (not Reddit/YouTube)?
+  Travel blogs carry what Reddit/YouTube miss: curated *lists with reasoning*,
+  historical and cultural context, logistics, and itinerary structure. They
+  excel for luxury/premium content, first-timer overviews, cultural depth, and
+  festival guides — exactly the vibes where Reddit tips feel thin and YouTube
+  Shorts are too visual.
+
+Pipeline:
+  1. _build_queries()     — 3–4 queries: season/vibe-aware base, vibe-specific,
+                            budget-aware, optional festival query.
+  2. search_fanout()      — parallel Tavily searches; dedupe by URL.
+  3. LLM extraction       — single pass: article excerpts → structured
+                            discoveries. Schema differs from Reddit: place_name
+                            + description + best_for + practical_info.
+                            No clustering needed — blog text is already curated.
+  4. _validate_and_dedupe — drop vague / generic outputs; cap at 8.
+
+Failure modes (all return [] gracefully):
+  - TAVILY_API_KEY missing (tool short-circuits before any network call)
+  - Tavily quota / API error
+  - 0 results across all queries
+  - LLM fails or all outputs fail validation
 """
 
 from __future__ import annotations
 
+import logging
+import re
+import uuid
+from typing import Any, Literal
+
+from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel, Field, field_validator
+
+from app.llm.factory import get_llm
 from app.schemas import ResearchDiscovery, TripParams
 from app.signals import TravelSignals
+from app.tools.tavily_search import TavilyResult, search_fanout
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Tunables
+# ---------------------------------------------------------------------------
+
+MAX_QUERIES = 4
+MAX_RESULTS_PER_QUERY = 5
+MAX_ARTICLES_FOR_LLM = 15          # cap before sending to LLM
+MAX_ARTICLE_CONTENT_CHARS = 500    # trim long excerpts to keep prompts lean
+MAX_DISCOVERIES_RETURNED = 8
+MIN_DESCRIPTION_LENGTH = 40
+
+
+# ---------------------------------------------------------------------------
+# Vagueness filter — blog-specific patterns
+# ---------------------------------------------------------------------------
+
+_VAGUE_PHRASE_RE = re.compile(
+    r"\bstunning\b"
+    r"|\bbreathtaking\b"
+    r"|\bpicturesque\b"
+    r"|\bvibrant\s+culture\b"
+    r"|\brich\s+culture\b"
+    r"|\bnatural\s+beauty\b"
+    r"|\bmust[-\s]?visit\b"
+    r"|\bsomething\s+for\s+everyone\b"
+    r"|\bworld[-\s]?class\b"
+    r"|\bunique\s+experience\b"
+    r"|\bbeautiful\s+(?:beaches?|landscapes?|architectures?|views?|scenery|places?)\b"
+    r"|\bwonderful\s+destination\b"
+    r"|\bamazing\s+(?:place|destination|experience|views?)\b",
+    re.IGNORECASE,
+)
+
+# Stock travel-blog templates the LLM falls into when articles are thin. These
+# fired on nearly every Manali blog discovery in the BENCHMARK run, e.g.
+# "A temple to visit in Manali, part of a travel guide that includes where to
+# go, eat, stay, and shop." Reject the discovery if the body matches.
+_BLOG_TEMPLATE_RE = re.compile(
+    r"\ba\s+\S{2,30}\s+to\s+visit\s+in\s+\S.{0,30}?,?\s*part\s+of\s+a\s+travel\s+guide\b"
+    r"|\bperfect\s+(?:place|spot)\s+for\s+everyone\b"
+    r"|\bwhere\s+to\s+(?:go|eat|stay|shop)(?:\s*,\s*(?:go|eat|stay|shop))+\b"
+    r"|\bbest\s+for\s+(?:everyone|all|families\s+and\s+couples)\b"
+    r"|\bguide\s+that\s+includes\s+(?:where|what)\s+to\s+(?:go|eat|stay|shop)\b",
+    re.IGNORECASE,
+)
+
+# Heuristic: "contains a proper noun beyond the place_name itself".
+# A capitalized 3+ letter word with no leading sentence-start period.
+# Used by _has_named_entity_beyond_place_name.
+_CAPWORD_RE = re.compile(r"\b([A-Z][a-zA-Z]{2,})\b")
+_COMMON_NON_ENTITY_CAPS = {
+    "The", "This", "That", "These", "Those", "It", "Its", "If", "For", "With",
+    "When", "Where", "Why", "How", "What", "And", "But", "Or", "So",
+    "Best", "First", "Most", "Local", "Locals", "Tip", "Tips", "Note", "Notes",
+    "Info", "Guide", "Day", "Days", "Visit", "Visiting", "Try",
+    "January", "February", "March", "April", "May", "June", "July", "August",
+    "September", "October", "November", "December",
+    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+}
+
+
+def _has_named_entity_beyond_place_name(body: str, place_name: str) -> bool:
+    """True if `body` contains ≥1 proper-noun-ish token not part of `place_name`.
+
+    This is the lightweight enforcement of "demand named entities" — we don't
+    insist on cuisine vs. dynasty vs. trek specifically (too brittle in regex),
+    but we DO insist the body name something concrete beyond the place title
+    itself. Catches stock templated descriptions like "A temple to visit in
+    Manali" which name no other entity at all.
+    """
+    place_tokens = {t.lower() for t in _CAPWORD_RE.findall(place_name)}
+    for match in _CAPWORD_RE.findall(body):
+        if match in _COMMON_NON_ENTITY_CAPS:
+            continue
+        if match.lower() in place_tokens:
+            continue
+        return True
+    return False
+
+
+# ---------------------------------------------------------------------------
+# LLM output schema
+# ---------------------------------------------------------------------------
+
+
+class _BlogPlace(BaseModel):
+    """One blog-derived travel discovery. Maps to ResearchDiscovery."""
+
+    place_name: str = Field(
+        ...,
+        min_length=2,
+        max_length=120,
+        description=(
+            "A specific proper noun: restaurant, monument, viewpoint, district, "
+            "dish, festival, trail, hotel, café, experience. NOT generic labels "
+            "like 'local markets', 'the beaches', 'tourist spots'."
+        ),
+    )
+    description: str = Field(
+        ...,
+        max_length=600,
+        description=(
+            "1-3 sentences (40+ chars) of curated insight grounded in what the "
+            "articles say. Include what makes it special, the context, who it's "
+            "best for. Avoid banned words: stunning, breathtaking, vibrant culture, "
+            "must-visit, rich culture, natural beauty. Drop the discovery if you "
+            "can't write a concrete sentence."
+        ),
+    )
+    best_for: str | None = Field(
+        default=None,
+        max_length=120,
+        description=(
+            "Who benefits most: e.g. 'couples, sunset photography', "
+            "'first-timers needing orientation', 'food lovers', "
+            "'history enthusiasts'. Null if the articles don't indicate."
+        ),
+    )
+    practical_info: str | None = Field(
+        default=None,
+        max_length=200,
+        description=(
+            "Logistics from the articles: entry fee, opening hours, "
+            "best season, reservation advice, transport note. Null if unknown."
+        ),
+    )
+    evidence_article_indices: list[int] = Field(
+        ...,
+        min_length=1,
+        description=(
+            "1-based indices of articles in the input that support this discovery. "
+            "REQUIRED — empty means drop it."
+        ),
+    )
+    tags: list[str] = Field(default_factory=list, max_length=5)
+    confidence: Literal["high", "medium", "low"] = "low"
+    source_type: Literal["blog", "maps"] = Field(
+        default="blog",
+        description=(
+            "'blog' for editorial content with reasoning; "
+            "'maps' for generic tourist anchors with no distinctive insight "
+            "(e.g. a famous landmark mentioned with no context). Default 'blog'."
+        ),
+    )
+
+    @field_validator("evidence_article_indices", mode="before")
+    @classmethod
+    def _coerce_indices(cls, v: Any) -> list[int]:
+        if v is None:
+            return []
+        if isinstance(v, int):
+            return [v]
+        if isinstance(v, str):
+            s = v.strip().strip("[]")
+            if not s:
+                return []
+            parts = [p.strip() for p in s.split(",") if p.strip()]
+            return [int(p) for p in parts if p.lstrip("-").isdigit()]
+        if isinstance(v, list):
+            out: list[int] = []
+            for x in v:
+                if isinstance(x, int):
+                    out.append(x)
+                elif isinstance(x, str) and x.strip().lstrip("-").isdigit():
+                    out.append(int(x.strip()))
+            return out
+        return []
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def _coerce_tags(cls, v: Any) -> list[str]:
+        if v is None:
+            return []
+        if isinstance(v, str):
+            return [t.strip() for t in v.split(",") if t.strip()]
+        if isinstance(v, list):
+            return [str(t).strip() for t in v if str(t).strip()]
+        return []
+
+
+class _BlogExtractionResult(BaseModel):
+    places: list[_BlogPlace]
+
+
+# ---------------------------------------------------------------------------
+# Query construction
+# ---------------------------------------------------------------------------
+
+
+def _build_queries(trip_params: TripParams, signals: TravelSignals) -> list[str]:
+    """Return 3–4 Tavily queries shaped by destination, season, vibes, and budget.
+
+    Queries are kept clean (no `-site:` syntax) because Tavily's
+    `exclude_domains` handles filtering. Season and vibe are woven in so
+    Tavily's re-ranking surfaces the most relevant blog posts.
+    """
+    dest = trip_params.destination.strip()
+    queries: list[str] = []
+
+    # Q1 (always): season-aware travel guide — broadest, best blog coverage.
+    if signals.season not in {"unknown"}:
+        queries.append(f"best {dest} {signals.season} travel guide")
+    else:
+        queries.append(f"best {dest} travel guide")
+
+    # Q2: first vibe if given — surfaces niche blog content matching user intent.
+    if trip_params.vibes:
+        first_vibe = trip_params.vibes[0].strip()
+        if first_vibe:
+            queries.append(f"{dest} {first_vibe} travel tips")
+
+    # Q3: budget-aware. Luxury → hotel/restaurant recs; shoestring → budget tips.
+    if signals.budget_tier == "luxury":
+        queries.append(f"{dest} luxury hotels restaurants experiences")
+    elif signals.budget_tier == "shoestring":
+        queries.append(f"{dest} budget travel tips cheap eats")
+    else:
+        # Mid/premium → general "things to do" or itinerary angle.
+        queries.append(f"{dest} itinerary things to do")
+
+    # Q4: festival-specific query (only when festival is active during the trip).
+    if signals.active_festivals and len(queries) < MAX_QUERIES:
+        queries.append(f"{dest} {signals.active_festivals[0]} guide")
+
+    # Dedupe while preserving order.
+    seen: set[str] = set()
+    out: list[str] = []
+    for q in queries:
+        key = q.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(q)
+        if len(out) >= MAX_QUERIES:
+            break
+    return out
+
+
+# ---------------------------------------------------------------------------
+# LLM extraction
+# ---------------------------------------------------------------------------
+
+
+_BLOG_SYSTEM = """You extract concrete travel discoveries from travel blog article excerpts about a single destination.
+
+Travel blogs provide what Reddit and YouTube miss: curated recommendations with reasoning, cultural/historical context, itinerary structure, and logistics. Your job is to surface specific places, dishes, experiences, and practical tips that a traveler would actually use.
+
+You are given 5-15 article excerpts. Each article typically yields 1-3 discoveries. AIM FOR 5-8 DISCOVERIES overall. Returning fewer than 3 from a 10-article batch means you were too strict.
+
+DEMAND A NAMED ENTITY BEYOND THE PLACE NAME (critical — auto-rejected downstream otherwise):
+Every `description` MUST name at least ONE concrete entity beyond the place itself. Pick the one that fits the category:
+  • Restaurants / cafés / food → cuisine + signature dish ("Goan-Portuguese sorpotel", "Hyderabadi biryani at Paradise")
+  • Historical sites (fort/temple/palace) → dynasty / architect / era / specific feature ("built 1459 by Rao Jodha", "Mughal jali screens", "Rajput-era inner sanctum")
+  • Adventure / treks / hikes → named peak / trail / grade / season ("Hampta Pass trek, moderate, June-Sept", "Beas Kund Class B route")
+  • Cultural / festivals → ceremony name + month / weeks-long event ("Pushkar Camel Fair, Kartik Purnima")
+  • Markets / neighbourhoods → named stalls / streets / what's sold there ("Fontainhas Latin quarter, art galleries on 31st January Road")
+
+If the only thing you can write is "A temple worth visiting in X, part of a travel guide" — drop the discovery. That stock template is auto-rejected.
+
+`place_name`: SHORT concrete proper noun. Examples:
+  GOOD: "Mehrangarh Fort", "Butter Chicken at Moti Mahal", "Nahargarh Fort sunset point",
+        "Fort Aguada beach road", "Kerala backwater houseboat", "Virupaksha Temple, Hampi".
+  BAD:  "the fort", "local markets", "temple complex", "street food scene", "beaches".
+
+`description`: 1-3 sentences grounded in what the articles actually say.
+  - Include WHY it's worth visiting — the specific reason, context, or detail.
+  - Include WHEN / WHO if relevant (best season, who it's for).
+  - AVOID these words — they will auto-reject the discovery:
+    stunning, breathtaking, picturesque, vibrant culture, rich culture, natural beauty,
+    must-visit, something for everyone, world-class, unique experience, beautiful beaches/views.
+  - AVOID these STOCK TEMPLATES (auto-rejected):
+    * "A <thing> to visit in <place>, part of a travel guide..."
+    * "Perfect place for everyone"
+    * "Where to go, eat, stay, and shop"
+    * "Best for everyone / families and couples"
+
+`best_for`: who benefits most (e.g. "solo history enthusiasts", "couples, sunrise photography",
+  "foodies, street-food crawls"). Null if not clear from the articles.
+
+`practical_info`: concrete logistics the articles mention (opening hours, entry fees, transport,
+  best season, advance booking needed). Null if none mentioned.
+
+`source_type`: 'blog' for curated editorial content; 'maps' for generic tourist-anchor entries
+  that lack distinctive editorial context (e.g. "The Colosseum is a famous ancient amphitheatre").
+
+`evidence_article_indices`: which article numbers [N] mention this. REQUIRED.
+
+`confidence`: 'high' if 3+ articles, 'medium' if 2, 'low' if 1 with strong detail.
+
+GOOD example (restaurant with named cuisine + signature dish):
+{
+  "place_name": "Vinayak Family Restaurant, Assagao",
+  "description": "Goan-Catholic family kitchen famed for its fish thali — pomfret recheado, kingfish curry, kokum rasam, all served on banana leaf at a tin-roof shack just off the Mapusa-Anjuna road.",
+  "best_for": "foodies, Goan-Portuguese cuisine",
+  "practical_info": "Open 12-4 PM and 7-10 PM; cash only; arrive before 1:15 PM at lunch or wait 30+ min",
+  "evidence_article_indices": [2, 5],
+  "tags": ["restaurant", "goan-catholic", "thali"],
+  "confidence": "medium",
+  "source_type": "blog"
+}
+
+GOOD example (fort with dynasty / era):
+{
+  "place_name": "Mehrangarh Fort, Jodhpur",
+  "description": "Hilltop sandstone fort founded 1459 by Rao Jodha, with seven gates and a museum of Marwar royal palanquins and Rajput weaponry; the Phool Mahal hall has 19th-century gold-leaf ceiling work.",
+  ...
+}
+
+OUTPUT: JSON {"places": [...]}. TARGET 5-8. Returning 0 from a 10-article batch is failure — re-read and extract what's there."""
+
+
+def _format_articles_for_prompt(articles: list[TavilyResult]) -> str:
+    blocks: list[str] = []
+    for i, a in enumerate(articles, start=1):
+        content = " ".join(a.content.split())
+        if len(content) > MAX_ARTICLE_CONTENT_CHARS:
+            content = content[:MAX_ARTICLE_CONTENT_CHARS] + "…"
+        block = (
+            f"[{i}] {a.title or '(no title)'}\n"
+            f"  URL: {a.url or '—'}\n"
+            f"  Excerpt: {content}"
+        )
+        blocks.append(block)
+    return "\n\n".join(blocks)
+
+
+async def _extract_via_llm(
+    trip_params: TripParams,
+    signals: TravelSignals,
+    articles: list[TavilyResult],
+) -> list[_BlogPlace]:
+    """Single-pass LLM extraction from blog article excerpts."""
+    if not articles:
+        return []
+
+    llm = get_llm("google_agent")
+    try:
+        structured = llm.with_structured_output(_BlogExtractionResult, method="json_mode")
+    except Exception:  # noqa: BLE001
+        structured = llm.with_structured_output(_BlogExtractionResult)
+
+    festival_line = (
+        f"Active festivals during trip: {', '.join(signals.active_festivals)}\n"
+        if signals.active_festivals
+        else ""
+    )
+    crowd_line = (
+        "Peak season — highlight less-crowded alternatives and note booking requirements.\n"
+        if signals.crowd_level in {"peak", "very_peak"}
+        else ""
+    )
+
+    user = (
+        f"Destination: {trip_params.destination}\n"
+        f"Trip dates: {trip_params.date_from} to {trip_params.date_to}\n"
+        f"Season: {signals.season} (crowd: {signals.crowd_level})\n"
+        f"Budget: {signals.budget_tier}\n"
+        f"{festival_line}"
+        f"{crowd_line}"
+        f"Vibes: {', '.join(trip_params.vibes) if trip_params.vibes else '—'}\n\n"
+        f"Travel blog articles:\n\n"
+        f"{_format_articles_for_prompt(articles)}\n\n"
+        f"Extract up to 8 concrete discoveries. Empty list is acceptable if articles "
+        f"carry no specific content."
+    )
+    messages: list[Any] = [
+        SystemMessage(content=_BLOG_SYSTEM),
+        HumanMessage(content=user),
+    ]
+    result = await structured.ainvoke(messages)
+    if not isinstance(result, _BlogExtractionResult):
+        result = _BlogExtractionResult.model_validate(result)
+    logger.info("google_agent.llm_extracted=%d", len(result.places))
+    return result.places
+
+
+# ---------------------------------------------------------------------------
+# Validation + deduplication
+# ---------------------------------------------------------------------------
+
+
+def _validate_and_dedupe(
+    extracted: list[_BlogPlace], n_articles: int
+) -> list[_BlogPlace]:
+    """Drop vague / templated / unsupported discoveries; dedupe by place_name; rank."""
+    survivors: list[_BlogPlace] = []
+    for place in extracted:
+        desc = place.description.strip()
+        if len(desc) < MIN_DESCRIPTION_LENGTH:
+            logger.info(
+                "google_agent.validate.drop reason=short place=%r", place.place_name
+            )
+            continue
+        vmatch = _VAGUE_PHRASE_RE.search(desc)
+        if vmatch:
+            logger.info(
+                "google_agent.validate.drop reason=vague phrase=%r place=%r",
+                vmatch.group(0),
+                place.place_name,
+            )
+            continue
+        tmatch = _BLOG_TEMPLATE_RE.search(desc)
+        if tmatch:
+            logger.info(
+                "google_agent.validate.drop reason=stock_template phrase=%r place=%r",
+                tmatch.group(0),
+                place.place_name,
+            )
+            continue
+        # Demand at least one named entity beyond the place_name itself.
+        # Catches templated descriptions that mention only the place title.
+        if not _has_named_entity_beyond_place_name(desc, place.place_name):
+            logger.info(
+                "google_agent.validate.drop reason=no_named_entity place=%r body=%r",
+                place.place_name,
+                desc,
+            )
+            continue
+        valid_indices = [i for i in place.evidence_article_indices if 1 <= i <= n_articles]
+        if not valid_indices:
+            logger.info(
+                "google_agent.validate.drop reason=no_evidence place=%r",
+                place.place_name,
+            )
+            continue
+        place.evidence_article_indices = valid_indices
+        survivors.append(place)
+
+    confidence_rank = {"high": 3, "medium": 2, "low": 1}
+    clusters: dict[str, _BlogPlace] = {}
+    for place in survivors:
+        key = place.place_name.lower().strip()
+        existing = clusters.get(key)
+        if existing is None:
+            clusters[key] = place
+            continue
+        if (len(place.evidence_article_indices), confidence_rank[place.confidence]) > (
+            len(existing.evidence_article_indices),
+            confidence_rank[existing.confidence],
+        ):
+            clusters[key] = place
+
+    ranked = sorted(
+        clusters.values(),
+        key=lambda p: (
+            confidence_rank[p.confidence],
+            len(p.evidence_article_indices),
+        ),
+        reverse=True,
+    )
+    return ranked[:MAX_DISCOVERIES_RETURNED]
+
+
+def _to_research_discoveries(
+    validated: list[_BlogPlace],
+) -> list[ResearchDiscovery]:
+    out: list[ResearchDiscovery] = []
+    for place in validated:
+        body_parts = [place.description.strip()]
+        if place.best_for:
+            body_parts.append(f"Best for: {place.best_for.strip()}.")
+        if place.practical_info:
+            body_parts.append(f"Info: {place.practical_info.strip()}.")
+        body = " ".join(p for p in body_parts if p)
+
+        tags = [t.strip() for t in place.tags if t.strip()][:3] or ["blog"]
+        source = place.source_type if place.source_type in {"blog", "maps"} else "blog"
+
+        out.append(
+            ResearchDiscovery(
+                id=str(uuid.uuid4()),
+                title=place.place_name.strip(),
+                body=body,
+                tags=tags,
+                source=source,  # type: ignore[arg-type]
+            )
+        )
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Public entry point
+# ---------------------------------------------------------------------------
 
 
 async def run_google_blog_agent(
@@ -22,11 +532,42 @@ async def run_google_blog_agent(
 ) -> list[ResearchDiscovery]:
     """Return blog-derived discoveries for the trip.
 
-    STUB: returns []. Real implementation lands in Sprint 3.
+    All errors are caught and result in []; the synthesizer continues with
+    whatever the other agents found.
     """
-    # TODO: implement
-    #   1. Build query: destination + season + vibe keywords + exclusions.
-    #   2. Call Tavily search (5 results, include summaries).
-    #   3. Build prompt (plan §4.3), call get_llm("google_agent").
-    #   4. Parse JSON, validate, return ResearchDiscovery[] (source="blog"|"maps").
-    return []
+    try:
+        queries = _build_queries(trip_params, signals)
+        logger.info("google_agent.start queries=%r", queries)
+
+        articles = await search_fanout(
+            queries, max_results_per_query=MAX_RESULTS_PER_QUERY
+        )
+        if not articles:
+            logger.warning("google_agent: 0 articles across all queries")
+            return []
+
+        # Cap before LLM to stay within token budget.
+        capped = articles[:MAX_ARTICLES_FOR_LLM]
+        logger.info(
+            "google_agent: %d articles after fanout+dedupe (using %d)",
+            len(articles),
+            len(capped),
+        )
+
+        extracted = await _extract_via_llm(trip_params, signals, capped)
+        validated = _validate_and_dedupe(extracted, n_articles=len(capped))
+        discoveries = _to_research_discoveries(validated)
+        logger.info(
+            "google_agent.done extracted=%d kept=%d returned=%d",
+            len(extracted),
+            len(validated),
+            len(discoveries),
+        )
+        return discoveries
+
+    except RuntimeError as e:
+        logger.error("google_agent config error: %s", e)
+        return []
+    except Exception as e:  # noqa: BLE001
+        logger.exception("google_agent unexpected failure: %s", e)
+        return []

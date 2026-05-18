@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # --- Per-role LLM provider/model selection ---
     LLM_YOUTUBE_PROVIDER: str = "groq"
     LLM_YOUTUBE_MODEL: str = "llama-3.3-70b-versatile"
+    # Long-form YouTube agent: same defaults as Shorts; override per-env if a
+    # bigger model is justified for the longer transcript context.
+    LLM_YOUTUBE_LONGFORM_PROVIDER: str = "groq"
+    LLM_YOUTUBE_LONGFORM_MODEL: str = "llama-3.3-70b-versatile"
     LLM_REDDIT_PROVIDER: str = "groq"
     LLM_REDDIT_MODEL: str = "llama-3.3-70b-versatile"
     LLM_GOOGLE_PROVIDER: str = "groq"
@@ -42,6 +46,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     TOGETHER_API_KEY: str = ""
+    CEREBRAS_API_KEY: str = ""
 
     # Optional: observability
     LANGSMITH_API_KEY: str = ""

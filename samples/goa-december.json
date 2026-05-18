@@ -1,0 +1,14 @@
+{
+  "trip_id": "00000000-0000-0000-0000-000000000010",
+  "user_id": "00000000-0000-0000-0000-0000000000aa",
+  "destination": "Goa, India",
+  "date_from": "2026-12-15",
+  "date_to": "2026-12-22",
+  "duration_days": 7,
+  "travelers": "2",
+  "vibes": ["beaches", "street food", "nightlife", "hidden gems"],
+  "accommodation": "Boutique Villa",
+  "pace": "Balanced",
+  "budget": "$$",
+  "preferences": "Avoid touristy zones; want sunset spots, indie cafes, live music."
+}
