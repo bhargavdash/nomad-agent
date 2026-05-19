@@ -590,6 +590,17 @@ def extract_signals(trip_params: TripParams) -> TravelSignals:
 _LLM_REGION_CACHE: dict[str, "_DestinationClassification"] = {}
 _LLM_ANCHOR_CACHE: dict[str, list[str]] = {}
 
+# Anchors that are geographically NOT inside a destination but the LLM commonly
+# hallucinates because they're nearby or frequently co-mentioned. Keys are
+# destination substrings (lowercased); values are anchor substrings to drop.
+_ANCHOR_GEO_EXCLUSIONS: dict[str, list[str]] = {
+    "rajasthan": ["taj mahal", "agra fort", "fatehpur sikri", "agra"],
+    "goa": ["hampi", "mumbai", "pune", "mysore"],
+    "kerala": ["hampi", "mysore", "goa", "coorg"],
+    "manali": ["shimla", "chandigarh", "amritsar"],
+    "jaipur": ["taj mahal", "agra"],
+}
+
 # Regions the keyword map already understands. The LLM is asked to map to one
 # of these when possible so the existing _infer_season rules apply directly.
 _KNOWN_REGIONS = frozenset(
@@ -724,10 +735,13 @@ async def enrich_anchor_hints(signals: TravelSignals, destination: str) -> None:
         "You list the most iconic tourist landmarks for travel planning. "
         "Return only well-known, widely-recognised attractions that any first-time visitor "
         "would want to see. Exclude restaurants and food stalls unless they are globally iconic. "
+        "CRITICAL: every landmark you list MUST be physically located INSIDE the destination — "
+        "do not include any landmark from a neighbouring city, district, or state. "
         "Output JSON only with key 'anchors' as an array of 5-6 place name strings in English."
     )
     user = (
-        f"List the 5-6 most iconic must-visit tourist landmarks in '{destination}'. "
+        f"List the 5-6 most iconic must-visit tourist landmarks that are "
+        f"physically located WITHIN '{destination}' (not in nearby regions). "
         "Include famous temples, museums, natural landmarks, theme parks, historic sites, "
         "and architectural icons. Use their common English names."
     )
@@ -743,6 +757,23 @@ async def enrich_anchor_hints(signals: TravelSignals, destination: str) -> None:
         if not isinstance(result, _AnchorList):
             result = _AnchorList.model_validate(result)
         anchors = [str(a).strip() for a in result.anchors if a][:6]
+
+        # Geography post-filter: drop anchors the LLM commonly hallucinates
+        # as belonging to a destination when they're in a neighbouring region.
+        excl_lower: list[str] = []
+        for kw, excl_terms in _ANCHOR_GEO_EXCLUSIONS.items():
+            if kw in dest_key:
+                excl_lower.extend(t.lower() for t in excl_terms)
+        if excl_lower:
+            before = len(anchors)
+            anchors = [a for a in anchors if not any(ex in a.lower() for ex in excl_lower)]
+            dropped = before - len(anchors)
+            if dropped:
+                logger.info(
+                    "signals.anchor_hints.geo_filter dest=%r dropped=%d",
+                    destination, dropped,
+                )
+
         if anchors:
             _LLM_ANCHOR_CACHE[dest_key] = anchors
             signals.top_anchors = anchors

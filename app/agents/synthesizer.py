@@ -65,10 +65,10 @@ logger = logging.getLogger(__name__)
 MIN_DISCOVERIES = 3
 MAX_DISCOVERIES = 12
 
-# AIDay.stops is bounded to [2, 6]. Min was lowered from 3 → 2 so days with
-# thin research emit fewer real stops instead of padding with generic anchors.
-# The per-day target is clamped into this range regardless of pace_density.
-MIN_STOPS_PER_DAY = 2
+# AIDay.stops is bounded to [3, 6]. Minimum of 3 ensures the padding presets
+# always fire on thin-research days — city-aware names ("Morning coffee in X")
+# are honest placeholders the UI can render rather than an incomplete day.
+MIN_STOPS_PER_DAY = 3
 MAX_STOPS_PER_DAY = 6
 
 # How many times to retry the LLM on validation failure before falling back.
