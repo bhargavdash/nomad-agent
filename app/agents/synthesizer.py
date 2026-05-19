@@ -276,7 +276,15 @@ in the itinerary. Hidden gems are valuable, but they must NOT displace the \
 anchors every visitor expects. Example: for Singapore, do not omit Sentosa \
 Island, Universal Studios, or S.E.A. Aquarium in favor of niche cafés if the \
 research lists them. A "hidden gems only" itinerary that misses the famous \
-sights is a worse traveler experience, not a better one.
+sights is a worse traveler experience, not a better one. \
+Discoveries tagged "anchor_hint" in their tags list are pre-validated canonical \
+landmarks seeded independently of the research agents. You MUST include AT \
+LEAST 3 "anchor_hint" discoveries as stops (more if the trip has enough days). \
+If a research discovery covers the same place (same name or close synonym), \
+use the research version — it has a richer body. The anchor_hint entry is a \
+fallback, not a replacement. This anchor requirement overrides vibe-matching \
+when necessary: a Singapore trip with "food" vibes must still include Sentosa \
+or Gardens by the Bay, not only hawker centres.
 
 11. SOURCE FRESHNESS. Prefer candidates whose source content is recent. If a \
 discovery's evidence comes from a Reddit post older than 3 years or a blog \

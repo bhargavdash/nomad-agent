@@ -109,7 +109,17 @@ _DESTINATION_SUBREDDIT_MAP: dict[str, list[str]] = {
     "mumbai": ["mumbai"],
     "delhi": ["delhi"],
     "bangalore": ["bangalore"],
+    # Indian states/regions — missing from original map
+    "odisha": ["india", "IndiaTravel"],
+    "puri": ["india", "IndiaTravel"],
+    "west bengal": ["india", "IndiaTravel"],
+    "kolkata": ["kolkata", "india"],
+    "gujarat": ["gujarat", "india", "IndiaTravel"],
+    "ahmedabad": ["india", "IndiaTravel"],
+    "pondicherry": ["india", "IndiaTravel"],
+    "coorg": ["india", "IndiaTravel"],
     # SEA
+    "singapore": ["singapore", "travel", "solotravel"],
     "bali": ["bali", "indonesia"],
     "indonesia": ["indonesia"],
     "thailand": ["Thailand"],

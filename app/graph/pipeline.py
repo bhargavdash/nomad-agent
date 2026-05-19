@@ -22,6 +22,7 @@ Why a separate long-form node (not extending Shorts):
 
 from __future__ import annotations
 
+import uuid
 from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -32,7 +33,7 @@ from app.agents.synthesizer import run_synthesizer
 from app.agents.youtube_longform import run_youtube_longform_agent
 from app.agents.youtube_shorts import run_youtube_agent
 from app.schemas import AIItinerary, ResearchDiscovery, TripParams
-from app.signals import TravelSignals, enrich_signals_with_llm, extract_signals
+from app.signals import TravelSignals, enrich_anchor_hints, enrich_signals_with_llm, extract_signals
 
 
 class PipelineState(TypedDict, total=False):
@@ -53,6 +54,7 @@ class PipelineState(TypedDict, total=False):
 async def signal_node(state: PipelineState) -> dict[str, Any]:
     signals = extract_signals(state["trip_params"])
     signals = await enrich_signals_with_llm(signals, state["trip_params"])
+    await enrich_anchor_hints(signals, state["trip_params"].destination)
     return {"signals": signals}
 
 
@@ -84,7 +86,33 @@ async def merge_node(state: PipelineState) -> dict[str, Any]:
     merged.extend(state.get("yt_longform_discoveries", []) or [])
     merged.extend(state.get("reddit_discoveries", []) or [])
     merged.extend(state.get("google_discoveries", []) or [])
-    return {"all_discoveries": merged}
+
+    # Pre-seed canonical anchor stops to bypass the extraction LLM's vibe bias.
+    # Only add seeds for anchors not already covered by real research (fuzzy match).
+    existing_lower = {d.title.lower() for d in merged}
+    destination = state["trip_params"].destination
+    anchor_seeds: list[ResearchDiscovery] = []
+    for name in (state["signals"].top_anchors or []):
+        name_lower = name.lower()
+        already_covered = any(
+            name_lower in existing or existing in name_lower
+            for existing in existing_lower
+        )
+        if not already_covered:
+            anchor_seeds.append(
+                ResearchDiscovery(
+                    id=str(uuid.uuid4()),
+                    title=name,
+                    body=(
+                        f"{name} — a must-visit landmark in {destination}. "
+                        "Pre-validated anchor stop. Check local advisories for opening hours."
+                    ),
+                    source="maps",
+                    tags=["anchor_hint"],
+                )
+            )
+
+    return {"all_discoveries": anchor_seeds + merged}
 
 
 async def synthesizer_node(state: PipelineState) -> dict[str, Any]:

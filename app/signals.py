@@ -58,6 +58,9 @@ class TravelSignals:
     # User-visible warnings (rendered in UI, e.g. "Monsoon — many beaches closed")
     warnings: list[str] = field(default_factory=list)
 
+    # Canonical must-visit landmarks seeded by LLM, independent of vibe-extraction.
+    top_anchors: list[str] = field(default_factory=list)
+
 
 # ---------------------------------------------------------------------------
 # Lookup tables — region detection
@@ -585,6 +588,7 @@ def extract_signals(trip_params: TripParams) -> TravelSignals:
 # ---------------------------------------------------------------------------
 
 _LLM_REGION_CACHE: dict[str, "_DestinationClassification"] = {}
+_LLM_ANCHOR_CACHE: dict[str, list[str]] = {}
 
 # Regions the keyword map already understands. The LLM is asked to map to one
 # of these when possible so the existing _infer_season rules apply directly.
@@ -693,6 +697,58 @@ async def _classify_destination_via_llm(
             "signals.llm_classifier_failed dest=%r err=%s", destination, e
         )
         return None
+
+
+async def enrich_anchor_hints(signals: TravelSignals, destination: str) -> None:
+    """Always runs. Populates signals.top_anchors with 5-6 canonical landmark names.
+
+    Makes one cheap LLM call per unique destination (cached in-process).
+    Bypasses the vibe-biased extraction LLM so famous anchors (Sentosa, Eiffel
+    Tower, etc.) are always seeded even when the trip's first vibe is "food".
+    Non-fatal on failure — pipeline continues without anchor seeds.
+    """
+    from pydantic import BaseModel
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    from app.llm.factory import get_llm
+
+    dest_key = destination.strip().lower()
+    if dest_key in _LLM_ANCHOR_CACHE:
+        signals.top_anchors = _LLM_ANCHOR_CACHE[dest_key]
+        return
+
+    class _AnchorList(BaseModel):
+        anchors: list[str]
+
+    system = (
+        "You list the most iconic tourist landmarks for travel planning. "
+        "Return only well-known, widely-recognised attractions that any first-time visitor "
+        "would want to see. Exclude restaurants and food stalls unless they are globally iconic. "
+        "Output JSON only with key 'anchors' as an array of 5-6 place name strings in English."
+    )
+    user = (
+        f"List the 5-6 most iconic must-visit tourist landmarks in '{destination}'. "
+        "Include famous temples, museums, natural landmarks, theme parks, historic sites, "
+        "and architectural icons. Use their common English names."
+    )
+    try:
+        llm = get_llm("signals_classifier")
+        try:
+            structured = llm.with_structured_output(_AnchorList, method="json_mode")
+        except Exception:  # noqa: BLE001
+            structured = llm.with_structured_output(_AnchorList)
+        result = await structured.ainvoke(
+            [SystemMessage(content=system), HumanMessage(content=user)]
+        )
+        if not isinstance(result, _AnchorList):
+            result = _AnchorList.model_validate(result)
+        anchors = [str(a).strip() for a in result.anchors if a][:6]
+        if anchors:
+            _LLM_ANCHOR_CACHE[dest_key] = anchors
+            signals.top_anchors = anchors
+            logger.info("signals.anchor_hints dest=%r anchors=%r", destination, anchors)
+    except Exception:  # noqa: BLE001
+        logger.exception("signals.anchor_hints.failed dest=%r", destination)
 
 
 async def enrich_signals_with_llm(

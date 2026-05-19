@@ -90,7 +90,7 @@ _BLOG_TEMPLATE_RE = re.compile(
     # "Best for: <audience>" template bleeding from the `best_for` field into the
     # description. The `best_for` field exists for this exact content — when it
     # appears inline, the description is structurally a stub.
-    r"|\bbest\s+for[:\s]\s*\w+"
+    r"|\bbest\s+for:\s+\w+"
     # "A <noun> to visit in <place>," / "An <noun> in <place>," openers.
     r"|^(?:A|An)\s+\w+\s+(?:to\s+visit\s+in|in)\s+\w+,",
     re.IGNORECASE,
@@ -232,6 +232,20 @@ class _BlogPlace(BaseModel):
 
 class _BlogExtractionResult(BaseModel):
     places: list[_BlogPlace]
+
+
+# Lightweight schema for the anchor-only pass. The LLM naturally uses `name`
+# rather than `place_name`, so this schema matches that and we convert later.
+class _AnchorEntry(BaseModel):
+    name: str = Field(..., min_length=2, max_length=120)
+    description: str = Field(..., max_length=600)
+    tags: list[str] = Field(default_factory=lambda: ["anchor_hint"])
+    confidence: Literal["high", "medium", "low"] = "medium"
+    evidence_article_indices: list[int] = Field(default_factory=list)
+
+
+class _AnchorExtractionResult(BaseModel):
+    places: list[_AnchorEntry]
 
 
 # ---------------------------------------------------------------------------
@@ -434,6 +448,79 @@ async def _extract_via_llm(
 
 
 # ---------------------------------------------------------------------------
+# Second-pass: vibe-agnostic anchor extraction
+# ---------------------------------------------------------------------------
+
+_ANCHOR_SYSTEM = """You extract well-known tourist attractions and landmarks from travel blog excerpts.
+
+Your job is to surface the FAMOUS, MUST-SEE attractions — theme parks, iconic museums, historic landmarks, famous districts, signature natural sites — that any first-time visitor would expect. Ignore the trip's food/nightlife/vibe preferences entirely. Extract what is world-famous or widely recommended by travel authorities.
+
+Rules:
+- Only extract named, famous attractions (not restaurants, cafés, or street-food items).
+- Descriptions must name at least one concrete detail: opening year, architect, famous feature, or what makes it iconic.
+- Target 3-4 results. Returning 0 from a 10-article batch is failure.
+- JSON field name is "name" (not "place_name"). Tags must always include "anchor_hint".
+- `confidence`: 'high' if 2+ articles, 'medium' if 1 with strong detail.
+
+OUTPUT: JSON {"places": [{"name": "...", "description": "...", "tags": ["anchor_hint"], "confidence": "high/medium"}, ...]}"""
+
+
+async def _extract_anchors_via_llm(
+    destination: str,
+    articles: list[TavilyResult],
+) -> list[_BlogPlace]:
+    """Vibe-agnostic second pass: extract famous tourist anchors from anchor-query articles.
+
+    Uses _AnchorExtractionResult (with `name` field) so the LLM matches the schema
+    naturally. Results are converted to _BlogPlace objects before returning.
+    """
+    if not articles:
+        return []
+
+    llm = get_llm("google_agent")
+    try:
+        structured = llm.with_structured_output(_AnchorExtractionResult, method="json_mode")
+    except Exception:  # noqa: BLE001
+        structured = llm.with_structured_output(_AnchorExtractionResult)
+
+    user = (
+        f"Destination: {destination}\n\n"
+        f"Travel blog articles:\n\n"
+        f"{_format_articles_for_prompt(articles)}\n\n"
+        f"Extract 3-4 famous tourist attractions (theme parks, iconic landmarks, "
+        f"must-see museums, famous districts). No food or restaurants."
+    )
+    messages: list[Any] = [
+        SystemMessage(content=_ANCHOR_SYSTEM),
+        HumanMessage(content=user),
+    ]
+    try:
+        result = await structured.ainvoke(messages)
+        if not isinstance(result, _AnchorExtractionResult):
+            result = _AnchorExtractionResult.model_validate(result)
+        blog_places: list[_BlogPlace] = []
+        for entry in result.places:
+            tags = entry.tags if "anchor_hint" in entry.tags else ["anchor_hint"] + entry.tags
+            blog_places.append(
+                _BlogPlace(
+                    place_name=entry.name,
+                    description=entry.description,
+                    best_for=None,
+                    practical_info=None,
+                    evidence_article_indices=entry.evidence_article_indices or [1],
+                    tags=tags,
+                    confidence=entry.confidence,
+                    source_type="blog",
+                )
+            )
+        logger.info("google_agent.anchor_pass extracted=%d", len(blog_places))
+        return blog_places
+    except Exception:  # noqa: BLE001
+        logger.exception("google_agent.anchor_pass failed")
+        return []
+
+
+# ---------------------------------------------------------------------------
 # Validation + deduplication
 # ---------------------------------------------------------------------------
 
@@ -569,12 +656,26 @@ async def run_google_blog_agent(
             len(capped),
         )
 
+        # Q1+Q2 are anchor queries ("top attractions", "must see") — use only
+        # those articles for the anchor pass so the LLM sees anchor-rich content.
+        anchor_article_count = min(len(articles), MAX_RESULTS_PER_QUERY * 2)
+        anchor_articles = articles[:anchor_article_count]
+
+        # Run anchor pass first (smaller, fewer tokens), then the vibe-aware pass.
+        # Sequential order avoids spiking Groq TPM — parallel calls on the same
+        # model exhaust the per-minute token budget and cause 429 cascades.
+        anchor_extracted = await _extract_anchors_via_llm(trip_params.destination, anchor_articles)
         extracted = await _extract_via_llm(trip_params, signals, capped)
-        validated = _validate_and_dedupe(extracted, n_articles=len(capped))
+
+        # Merge: anchor results first so they survive dedup when place_name matches.
+        merged_extracted = anchor_extracted + extracted
+        validated = _validate_and_dedupe(merged_extracted, n_articles=len(capped))
         discoveries = _to_research_discoveries(validated)
         logger.info(
-            "google_agent.done extracted=%d kept=%d returned=%d",
+            "google_agent.done extracted=%d anchor=%d merged=%d kept=%d returned=%d",
             len(extracted),
+            len(anchor_extracted),
+            len(merged_extracted),
             len(validated),
             len(discoveries),
         )
