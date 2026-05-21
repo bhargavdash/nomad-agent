@@ -70,6 +70,7 @@ _VAGUE_PHRASE_RE = re.compile(
     r"|\bworld[-\s]?class\b"
     r"|\bunique\s+experience\b"
     r"|\bbeautiful\s+(?:beaches?|landscapes?|architectures?|views?|scenery|places?)\b"
+    r"|\b(?:with|featuring)\s+(?:scenic|beautiful|stunning)\s+views?\b"
     r"|\bwonderful\s+destination\b"
     r"|\bamazing\s+(?:place|destination|experience|views?)\b",
     re.IGNORECASE,
@@ -84,7 +85,14 @@ _BLOG_TEMPLATE_RE = re.compile(
     r"|\bperfect\s+(?:place|spot)\s+for\s+everyone\b"
     r"|\bwhere\s+to\s+(?:go|eat|stay|shop)(?:\s*,\s*(?:go|eat|stay|shop))+\b"
     r"|\bbest\s+for\s+(?:everyone|all|families\s+and\s+couples)\b"
-    r"|\bguide\s+that\s+includes\s+(?:where|what)\s+to\s+(?:go|eat|stay|shop)\b",
+    r"|\bguide\s+that\s+includes\s+(?:where|what)\s+to\s+(?:go|eat|stay|shop)\b"
+    r"|\bpart\s+of\s+a\s+travel\s+guide\b"
+    # "Best for: <audience>" template bleeding from the `best_for` field into the
+    # description. The `best_for` field exists for this exact content — when it
+    # appears inline, the description is structurally a stub.
+    r"|\bbest\s+for:\s+\w+"
+    # "A <noun> to visit in <place>," / "An <noun> in <place>," openers.
+    r"|^(?:A|An)\s+\w+\s+(?:to\s+visit\s+in|in)\s+\w+,",
     re.IGNORECASE,
 )
 
@@ -226,34 +234,53 @@ class _BlogExtractionResult(BaseModel):
     places: list[_BlogPlace]
 
 
+# Lightweight schema for the anchor-only pass. The LLM naturally uses `name`
+# rather than `place_name`, so this schema matches that and we convert later.
+class _AnchorEntry(BaseModel):
+    name: str = Field(..., min_length=2, max_length=120)
+    description: str = Field(..., max_length=600)
+    tags: list[str] = Field(default_factory=lambda: ["anchor_hint"])
+    confidence: Literal["high", "medium", "low"] = "medium"
+    evidence_article_indices: list[int] = Field(default_factory=list)
+
+
+class _AnchorExtractionResult(BaseModel):
+    places: list[_AnchorEntry]
+
+
 # ---------------------------------------------------------------------------
 # Query construction
 # ---------------------------------------------------------------------------
 
 
 def _build_queries(trip_params: TripParams, signals: TravelSignals) -> list[str]:
-    """Return 3–4 Tavily queries shaped by destination, season, vibes, and budget.
+    """Return 3–4 Tavily queries shaped by destination, vibes, and budget.
 
     Queries are kept clean (no `-site:` syntax) because Tavily's
-    `exclude_domains` handles filtering. Season and vibe are woven in so
-    Tavily's re-ranking surfaces the most relevant blog posts.
+    `exclude_domains` handles filtering. Q1+Q2 cover the must-see anchors
+    so famous attractions (Sentosa, Eiffel Tower, etc.) surface; Q3+Q4
+    cover vibe/budget personalization. Festival/season context is conveyed
+    to the LLM via the user message, not the queries.
     """
     dest = trip_params.destination.strip()
     queries: list[str] = []
 
-    # Q1 (always): season-aware travel guide — broadest, best blog coverage.
-    if signals.season not in {"unknown"}:
-        queries.append(f"best {dest} {signals.season} travel guide")
-    else:
-        queries.append(f"best {dest} travel guide")
+    # Q1 (always): anchor / must-see coverage. Sprint 4 benchmark showed
+    # Singapore missed Sentosa / Universal / SEA Aquarium because the prior
+    # season-aware query never specifically asked for top attractions.
+    queries.append(f"top attractions in {dest}")
 
-    # Q2: first vibe if given — surfaces niche blog content matching user intent.
+    # Q2 (always): second anchor angle — different phrasing surfaces a
+    # different mix of editorial sources.
+    queries.append(f"must see {dest}")
+
+    # Q3: first vibe if given — surfaces niche blog content matching user intent.
     if trip_params.vibes:
         first_vibe = trip_params.vibes[0].strip()
         if first_vibe:
             queries.append(f"{dest} {first_vibe} travel tips")
 
-    # Q3: budget-aware. Luxury → hotel/restaurant recs; shoestring → budget tips.
+    # Q4: budget-aware. Luxury → hotel/restaurant recs; shoestring → budget tips.
     if signals.budget_tier == "luxury":
         queries.append(f"{dest} luxury hotels restaurants experiences")
     elif signals.budget_tier == "shoestring":
@@ -261,10 +288,6 @@ def _build_queries(trip_params: TripParams, signals: TravelSignals) -> list[str]
     else:
         # Mid/premium → general "things to do" or itinerary angle.
         queries.append(f"{dest} itinerary things to do")
-
-    # Q4: festival-specific query (only when festival is active during the trip).
-    if signals.active_festivals and len(queries) < MAX_QUERIES:
-        queries.append(f"{dest} {signals.active_festivals[0]} guide")
 
     # Dedupe while preserving order.
     seen: set[str] = set()
@@ -350,6 +373,12 @@ GOOD example (fort with dynasty / era):
   ...
 }
 
+REJECTION → REWRITE (illustrates what we drop and what we keep):
+  ❌ DROP — stock template, no entity beyond place name:
+     "Lake city with a mix of Rajput and Mughal architecture, and scenic views. Best for: romance, history enthusiasts."
+  ✅ KEEP — names entity (dynasty + builder + photo spot), gives logistics hook:
+     "Udaipur's City Palace — Mewar-dynasty Rajput-Mughal hybrid started 1559 under Maharana Udai Singh II; the Sheesh Mahal mirror room is the photo spot. Pair with a sunset boat ride on Lake Pichola."
+
 OUTPUT: JSON {"places": [...]}. TARGET 5-8. Returning 0 from a 10-article batch is failure — re-read and extract what's there."""
 
 
@@ -416,6 +445,79 @@ async def _extract_via_llm(
         result = _BlogExtractionResult.model_validate(result)
     logger.info("google_agent.llm_extracted=%d", len(result.places))
     return result.places
+
+
+# ---------------------------------------------------------------------------
+# Second-pass: vibe-agnostic anchor extraction
+# ---------------------------------------------------------------------------
+
+_ANCHOR_SYSTEM = """You extract well-known tourist attractions and landmarks from travel blog excerpts.
+
+Your job is to surface the FAMOUS, MUST-SEE attractions — theme parks, iconic museums, historic landmarks, famous districts, signature natural sites — that any first-time visitor would expect. Ignore the trip's food/nightlife/vibe preferences entirely. Extract what is world-famous or widely recommended by travel authorities.
+
+Rules:
+- Only extract named, famous attractions (not restaurants, cafés, or street-food items).
+- Descriptions must name at least one concrete detail: opening year, architect, famous feature, or what makes it iconic.
+- Target 3-4 results. Returning 0 from a 10-article batch is failure.
+- JSON field name is "name" (not "place_name"). Tags must always include "anchor_hint".
+- `confidence`: 'high' if 2+ articles, 'medium' if 1 with strong detail.
+
+OUTPUT: JSON {"places": [{"name": "...", "description": "...", "tags": ["anchor_hint"], "confidence": "high/medium"}, ...]}"""
+
+
+async def _extract_anchors_via_llm(
+    destination: str,
+    articles: list[TavilyResult],
+) -> list[_BlogPlace]:
+    """Vibe-agnostic second pass: extract famous tourist anchors from anchor-query articles.
+
+    Uses _AnchorExtractionResult (with `name` field) so the LLM matches the schema
+    naturally. Results are converted to _BlogPlace objects before returning.
+    """
+    if not articles:
+        return []
+
+    llm = get_llm("google_agent")
+    try:
+        structured = llm.with_structured_output(_AnchorExtractionResult, method="json_mode")
+    except Exception:  # noqa: BLE001
+        structured = llm.with_structured_output(_AnchorExtractionResult)
+
+    user = (
+        f"Destination: {destination}\n\n"
+        f"Travel blog articles:\n\n"
+        f"{_format_articles_for_prompt(articles)}\n\n"
+        f"Extract 3-4 famous tourist attractions (theme parks, iconic landmarks, "
+        f"must-see museums, famous districts). No food or restaurants."
+    )
+    messages: list[Any] = [
+        SystemMessage(content=_ANCHOR_SYSTEM),
+        HumanMessage(content=user),
+    ]
+    try:
+        result = await structured.ainvoke(messages)
+        if not isinstance(result, _AnchorExtractionResult):
+            result = _AnchorExtractionResult.model_validate(result)
+        blog_places: list[_BlogPlace] = []
+        for entry in result.places:
+            tags = entry.tags if "anchor_hint" in entry.tags else ["anchor_hint"] + entry.tags
+            blog_places.append(
+                _BlogPlace(
+                    place_name=entry.name,
+                    description=entry.description,
+                    best_for=None,
+                    practical_info=None,
+                    evidence_article_indices=entry.evidence_article_indices or [1],
+                    tags=tags,
+                    confidence=entry.confidence,
+                    source_type="blog",
+                )
+            )
+        logger.info("google_agent.anchor_pass extracted=%d", len(blog_places))
+        return blog_places
+    except Exception:  # noqa: BLE001
+        logger.exception("google_agent.anchor_pass failed")
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -554,12 +656,26 @@ async def run_google_blog_agent(
             len(capped),
         )
 
+        # Q1+Q2 are anchor queries ("top attractions", "must see") — use only
+        # those articles for the anchor pass so the LLM sees anchor-rich content.
+        anchor_article_count = min(len(articles), MAX_RESULTS_PER_QUERY * 2)
+        anchor_articles = articles[:anchor_article_count]
+
+        # Run anchor pass first (smaller, fewer tokens), then the vibe-aware pass.
+        # Sequential order avoids spiking Groq TPM — parallel calls on the same
+        # model exhaust the per-minute token budget and cause 429 cascades.
+        anchor_extracted = await _extract_anchors_via_llm(trip_params.destination, anchor_articles)
         extracted = await _extract_via_llm(trip_params, signals, capped)
-        validated = _validate_and_dedupe(extracted, n_articles=len(capped))
+
+        # Merge: anchor results first so they survive dedup when place_name matches.
+        merged_extracted = anchor_extracted + extracted
+        validated = _validate_and_dedupe(merged_extracted, n_articles=len(capped))
         discoveries = _to_research_discoveries(validated)
         logger.info(
-            "google_agent.done extracted=%d kept=%d returned=%d",
+            "google_agent.done extracted=%d anchor=%d merged=%d kept=%d returned=%d",
             len(extracted),
+            len(anchor_extracted),
+            len(merged_extracted),
             len(validated),
             len(discoveries),
         )

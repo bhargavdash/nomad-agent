@@ -143,8 +143,22 @@ def test_ai_itinerary_rejects_too_few_stops() -> None:
             title="Day 1",
             description="Arrival",
             highlights=["one", "two"],
-            stops=[_valid_stop(1), _valid_stop(2)],  # only 2 stops, min is 3
+            stops=[_valid_stop(1)],  # only 1 stop, min is 2
         )
+
+
+def test_ai_itinerary_accepts_two_stops() -> None:
+    # min_length lowered 3 → 2 so days with thin research emit fewer real
+    # stops instead of being padded with filler. See BENCHMARK §8.1.
+    day = AIDay(
+        dayNumber=1,
+        city="Goa",
+        title="Day 1",
+        description="Arrival",
+        highlights=["one", "two"],
+        stops=[_valid_stop(1), _valid_stop(2)],
+    )
+    assert len(day.stops) == 2
 
 
 def test_ai_itinerary_rejects_too_few_discoveries() -> None:

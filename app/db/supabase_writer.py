@@ -79,7 +79,6 @@ async def write_itinerary(trip_id: str, itinerary: AIItinerary) -> None:
                     {
                         "trip_id": trip_id,
                         "day_id": day_id,
-                        "day_number": d.dayNumber,
                         "sort_order": s.sortOrder,
                         "time": s.time,
                         "ampm": s.ampm,

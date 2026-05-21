@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -35,6 +36,12 @@ REDDIT_BASE = "https://www.reddit.com"
 DEFAULT_USER_AGENT = "web:nomad-agent:v0.1 (by /u/nomad_dev)"
 RATE_LIMIT_SLEEP_SECONDS = 1.0
 DEFAULT_TIMEOUT_SECONDS = 15.0
+
+# Freshness cutoff: drop posts older than this. Travel info ages — closed
+# restaurants, renamed neighborhoods, prices that have doubled. A 3-year
+# window keeps the long tail of evergreen advice without surfacing 2014
+# "best of Goa" lists where most recommendations have changed hands.
+MAX_POST_AGE_DAYS = 3 * 365
 
 
 # ---------------------------------------------------------------------------
@@ -173,6 +180,29 @@ class RedditBlockedError(Exception):
     """Reddit returned 403 — we're being rate-limited / blocked."""
 
 
+def _filter_by_age(
+    posts: list[RedditPost], max_age_days: int
+) -> list[RedditPost]:
+    """Drop posts older than max_age_days. Posts with missing/zero created_utc
+    are kept (treated as unknown age, not necessarily old)."""
+    if max_age_days <= 0:
+        return posts
+    cutoff = time.time() - (max_age_days * 86400)
+    fresh: list[RedditPost] = []
+    dropped = 0
+    for p in posts:
+        if p.created_utc and p.created_utc < cutoff:
+            dropped += 1
+            continue
+        fresh.append(p)
+    if dropped:
+        logger.info(
+            "reddit.filter_by_age dropped=%d kept=%d cutoff_days=%d",
+            dropped, len(fresh), max_age_days,
+        )
+    return fresh
+
+
 async def search_reddit(
     query: str,
     subreddit: str,
@@ -180,12 +210,17 @@ async def search_reddit(
     limit: int = 10,
     sort: str = "relevance",
     time_filter: str = "year",
+    max_age_days: int = MAX_POST_AGE_DAYS,
     user_agent: str | None = None,
 ) -> list[RedditPost]:
     """Search a single subreddit and return parsed posts.
 
     Mirrors: https://www.reddit.com/r/{subreddit}/search.json
               ?q=...&restrict_sr=1&sort=relevance&t=year&limit=10
+
+    Posts older than `max_age_days` (default 3 years) are dropped after
+    parsing — Reddit's `t=year` query param is loose and frequently returns
+    older results that mention the destination.
 
     On 403, falls back once to old.reddit.com (whose anti-bot layer is
     sometimes more lenient). Persistent 403 raises RedditBlockedError so the
@@ -224,6 +259,7 @@ async def search_reddit(
                 )
                 return []
         posts = _parse_listing(payload)
+        posts = _filter_by_age(posts, max_age_days)
         logger.info(
             "reddit.search sub=%s q=%r got=%d (via %s)",
             subreddit, query, len(posts), base,

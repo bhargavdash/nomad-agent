@@ -24,6 +24,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -44,6 +45,20 @@ SHORTS_MAX_DURATION_SECONDS = 300
 LONGFORM_MIN_DURATION_SECONDS = 240
 LONGFORM_MAX_DURATION_SECONDS = 1500
 DEFAULT_SEARCH_MAX_RESULTS = 25
+
+# Freshness window for YouTube searches. 2 years drops most pre-pandemic
+# travel content (where attractions/restaurants frequently no longer exist
+# or have changed character) while keeping a reasonable depth of authentic
+# creator content. Iconic landmarks like the Eiffel Tower still have plenty
+# of recent content; this isn't a coverage problem for major anchors.
+PUBLISHED_AFTER_DAYS = 730
+
+
+def _published_after_iso() -> str:
+    """RFC 3339 timestamp PUBLISHED_AFTER_DAYS ago, for YouTube's publishedAfter
+    parameter. Computed at call time so each request uses a current cutoff."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=PUBLISHED_AFTER_DAYS)
+    return cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +131,7 @@ async def _search_short_videos(
         "maxResults": min(max_results, 50),
         "order": "relevance",
         "safeSearch": "moderate",
+        "publishedAfter": _published_after_iso(),
         "key": api_key,
     }
     async with httpx.AsyncClient(timeout=15.0) as client:
@@ -256,6 +272,7 @@ async def _search_medium_videos(
         "maxResults": min(max_results, 50),
         "order": "relevance",
         "safeSearch": "moderate",
+        "publishedAfter": _published_after_iso(),
         "key": api_key,
     }
     async with httpx.AsyncClient(timeout=15.0) as client:

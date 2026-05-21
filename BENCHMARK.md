@@ -234,3 +234,935 @@ This is exactly the input that the **per-source content strategy spec doc** (AI-
 Run-output artefacts kept under `out/` for AI-7 regression:
 - `out/goa.json`, `out/goa.stderr.log`
 - `out/manali.json`, `out/manali.stderr.log`
+
+---
+
+---
+
+# Sprint 3 AI-7 — Improvement Benchmark
+
+**Date:** 2026-05-17
+**Run by:** end-to-end via `scripts/run_pipeline.py`
+**LLM config:** Groq Llama-3.3-70b-versatile (YouTube, Reddit, Google Blog); Groq Llama-3.3-70b-versatile (Synthesizer — note: switched from Claude Sonnet to Groq for cost; reverts if synthesis quality drops further)
+**Test input:** `samples/rajasthan-december.json` — Rajasthan, India | Dec 1–10 (10 days) | heritage, desert, local cuisine, photography | Balanced pace | $$ | Heritage Haveli
+
+> TL;DR: **The P0 bugs are fixed. The Reddit filter is working. Stats are honest. But the content quality ceiling hasn't moved much** — YouTube still produces thin bodies, Google Blog still uses stock templates, and "Cultural anchor" padding persists because the Python fallback presets weren't updated when the LLM prompt rule was added. Reddit is now contributing 8 relevant discoveries but still zero place-stops in the final itinerary (correctly treated as context, not destinations).
+
+---
+
+## 1. Test input
+
+| Sample | Destination | Dates | Season | Vibes | Pace | Duration |
+|---|---|---|---|---|---|---|
+| `samples/rajasthan-december.json` | Rajasthan, India | 2026-12-01 → 10 (10d) | peak / peak crowd | heritage, desert, local cuisine, photography | Balanced | 10 days |
+
+Signal layer output:
+- Region: india | Season: peak | Crowd: peak | Budget: mid | Pace density: 4 stops/day
+- Active festivals: — | Weather hint: — | Warnings: —
+- Query modifiers include: `peak season`, `best weather`, `less crowded`, `local favorites`, `heritage`, `desert`, `local cuisine`, `photography`
+
+---
+
+## 2. Performance benchmark
+
+### Wall-clock timing (sequential execution)
+
+| Stage | Rajasthan (s) | Goa Sprint 2 (s) | Manali Sprint 2 (s) | Notes |
+|---|---|---|---|---|
+| Signals | <0.01 | <0.01 | <0.01 | Pure Python |
+| **YouTube agent** | **~12** | **18.0** | **11.7** | 4 queries × 15 videos, 54 unique → 30 quality-filtered → 8 clusters → pass2 returned 6 → kept 4. Faster than Goa. |
+| **Reddit agent** | **~48** | **72.5** | **46.1** | 5 queries × 3 subs = 15 pairs. 61 raw posts, 21 dropped off-topic by destination filter, 10 survived, comments enriched, LLM call returned 8. |
+| **Google Blog agent** | **~5** | **5.4** | **5.7** | 3 queries × 5 Tavily results = 15 articles → LLM extracted 8 |
+| **Synthesizer** | **~7** | **5.7** | **6.8** | 10-day trip (vs 7) — slightly more LLM work. 1 attempt, succeeded. |
+| **End-to-end** | **~72 s** | **~100 s** | **~73 s** | Rajasthan is 10 days (43% more) yet faster than Goa due to Reddit destination filter cutting request count |
+
+**Reddit speedup:** The destination-mention filter (`_post_mentions_destination`) drops off-topic posts before comment enrichment. 21 posts dropped = 21 fewer comment-fetch HTTP calls × 2s sleep overhead each. That's the dominant cause of the time reduction vs Sprint 2's Goa run.
+
+### LLM call count per run
+
+| Agent | LLM calls | Notes |
+|---|---|---|
+| YouTube | 3 (2 pass1 batches + 1 pass2) | 1 pass1 batch returned 400 (validation error on empty place_name), 2 succeeded |
+| Reddit | 1 | |
+| Google Blog | 1 | |
+| Synthesizer | 1 | |
+| **Total** | **6** | One fewer than Sprint 2 (Groq 400 on one pass1 batch counted as a failed call, not a retry) |
+
+---
+
+## 3. Discovery yield per agent
+
+| Agent | Rajasthan returned | Quality verdict |
+|---|---|---|
+| YouTube | **4** (from 54 raw, 30 quality-filtered, 8 clusters, pass2=6, kept=4) | 🟡 **Better than Sprint 2** (1→4). Still thin bodies: "A palace in Jaipur, also known as City Palace." Hawa Mahal correctly dropped (vague_phrase). Jaisalmer Fort dropped (short_body=19 chars). |
+| Reddit | **8** (from 61 raw, 21 off-topic dropped, 10 filtered, extracted=8, kept=8) | 🟢 **Massive improvement over Sprint 2** (3→8). All 8 are Rajasthan-specific: kidney stone risk, water quality, tourist prices, elephant tourism ethics, train class, Udaipur rec, pharma safety, rural hospitality. Destination filter is working. |
+| Google Blog | **8** (from 15 articles → LLM extracted 8) | 🟡 **Same quality as Sprint 2** — content bodies still stock-template style. "Lake city with a mix of Rajput and Mughal architecture, and scenic views. Best for: romance, history enthusiasts." No restaurant details, no architect names, no pairing suggestions. |
+
+### Final itinerary stop source breakdown
+
+| Destination | Total stops | youtube | reddit | blog | **maps (padding)** |
+|---|---|---|---|---|---|
+| Rajasthan (Sprint 3) | 30 | 2 (7%) | **0 (0%)** | 7 (23%) | **21 (70%)** |
+| Goa (Sprint 2) | 23 | 1 (4%) | 0 (0%) | 5 (22%) | 17 (74%) |
+| Manali (Sprint 2) | 24 | 1 (4%) | 0 (0%) | 7 (29%) | 16 (67%) |
+
+Reddit still contributes 0 place-stops. This is now **correct behavior** — the 8 Reddit discoveries are warnings and tips (kidney stone risk, water quality) that the synthesizer correctly surfaces in day *descriptions* rather than inventing a place called "Rajasthan kidney stone risk". The source integrity is better; the padding rate is essentially unchanged.
+
+---
+
+## 4. Bugs fixed vs Sprint 2
+
+### ✅ FIXED — P0: Chronological ordering bug
+
+Sprint 2 `BENCHMARK.md §6` identified five out-of-order stops across Goa + Manali.
+
+**Rajasthan run:** Zero chronological violations across all 10 days and 30 stops. Day 10 has "2:00 PM Cultural anchor → 2:30 PM Departure" — 30-minute gap is close but technically correct (2:00 before 2:30). Fix confirmed: `_resort_stops_chronologically()` with `_time_to_minutes()` in `synthesizer.py` works correctly.
+
+### ✅ FIXED — P1: `stats_places` over-count
+
+Sprint 2 Goa: `stats_places=22` despite only 6 real places.
+
+**Rajasthan run:** `stats_places=9` — correctly counts only non-maps stops (2 youtube + 7 blog = 9). With 21 maps stops out of 30 total, the honest count is 9 not 30. Fix confirmed: `_compute_stats()` now excludes `source="maps"` stops.
+
+### ✅ FIXED — P2: `stats_tips` misleading count
+
+Sprint 2 Goa: `stats_tips=5` badge but 0 tips actually referenced as stops.
+
+**Rajasthan run:** `stats_tips=0` — 8 Reddit warning/tip discoveries found but none are referenced as place-stops (correct). No phantom tip badge. Fix confirmed: count only discoveries referenced by an actual stop.
+
+### ✅ FIXED — P1: Warnings not surfaced in itinerary
+
+Sprint 2 Manali: monsoon landslide/road-closure warnings generated by signals layer but never appeared in the itinerary.
+
+**Rajasthan run:** Day 1 description: *"Be mindful of dehydration and drink plenty of water, as Rajasthan is part of the 'kidney stone belt' in India."* Day 3 description: *"Be mindful of the water quality in Rajasthan."* These warnings came directly from Reddit discoveries and were surfaced via the synthesizer prompt Rule 8 (`WARNINGS SURFACING`). Fix confirmed.
+
+### ✅ IMPROVED — Reddit destination-mention filter
+
+Sprint 2: Reddit returned pan-India content (RPO Chandigarh passport surrender, monsoon onset over India) for a Manali query.
+
+**Rajasthan run:** 21 of 61 raw posts (34%) dropped by `_post_mentions_destination()` before LLM. The 10 surviving posts yielded 8 genuine Rajasthan-specific discoveries. Filter is working; false-positive rate (wrongly dropped on-topic posts) unknown but output quality is clearly higher.
+
+### ✅ IMPROVED — YouTube pass-2 yield: 1 → 4 places
+
+Sprint 2: 52 raw videos → 1 place returned (93% drop in pass-2).
+
+**Rajasthan run:** 54 raw videos → 4 places returned (33% drop in pass-2). Still below the AI-7 target of 5-8, but meaningfully better. Two drops were correct: "Hawa Mahal" (vague_phrase match: "beautiful place") and "Jaisalmer Fort" (short_body: 19 chars). The quality gate is doing its job.
+
+---
+
+## 5. Bugs confirmed NOT fixed / newly observed
+
+### 🔴 R1 — "Cultural anchor" still appears in padding output (7 of 30 stops)
+
+The synthesizer prompt (Rule 3) explicitly says *"NOT a generic label like 'Cultural anchor'"*, but `_default_anchor_stop()` in `synthesizer.py` still has `"Cultural anchor"` as `presets[2]`. When the LLM delivers <3 stops for a day, Python padding fires and inserts "Cultural anchor" at 2:00 PM regardless. Affects Days 3, 5, 6, 7, 8, 9, 10.
+
+**Root cause:** The LLM prompt rule and the Python fallback presets are out of sync. Prompt was updated; fallback presets were not.
+
+**Fix (< 15 min):** Replace `"Cultural anchor"` in `_default_anchor_stop` `presets[2]` with a more concrete named anchor like `"Old City exploration"` or simply remove the preset and derive it from the trip destination. Also rename the other generic presets ("Neighborhood walk" → `"Bazaar walk"` or similar).
+
+### 🟠 R2 — Day 5 (Jaisalmer Day 2) is entirely maps padded
+
+The synthesizer exhausted Jaisalmer blog/YouTube candidates after Day 4. Day 5 has 3 maps-only stops: Neighborhood walk → Cultural anchor → Exploring the Havelis. The synthesizer should have recognised it had no more Jaisalmer material and either (a) tightened to fewer stops, or (b) borrowed a discovery from another city's overflow. This is the "synthesizer should allow fewer stops when research is thin" principle from AI-7, not yet fully implemented — the target was made an upper bound, but padding still fills to the minimum (3).
+
+### 🟠 R3 — Google Blog body quality unchanged
+
+All 8 blog discoveries follow the same template: `"<Place> with <generic_description>. Best for: <audience>."` No restaurant cuisine types, no architect names, no specific trek grades. This was the AI-7 P1 fix target ("demand named entities; reject template phrases") — appears not yet applied.
+
+### 🟡 R4 — YouTube bodies are thin but improving
+
+Bodies like "A palace in Jaipur, also known as City Palace" and "A fort in Jaipur, also known as Amer Fort" give the synthesizer no visual or contextual detail to write rich stop descriptions from. The AI-7 fix (carry visual descriptors through pass-1 → pass-2) appears partially applied (4 places vs 1 is a win) but body richness is unchanged.
+
+### 🟡 R5 — `r/rajasthan` subreddit not in destination map
+
+`_DESTINATION_SUBREDDIT_MAP` has `"rajasthan": ["IndiaTravel"]` but not `r/rajasthan` (which exists and has ~40k members). The agent defaulted to `r/travel`, `r/solotravel`, `r/india`, `r/IndiaTravel`. Adding `r/rajasthan` would materially improve recall for Rajasthan-specific content.
+
+---
+
+## 6. Destination differentiation — does Rajasthan feel distinct?
+
+| Aspect | Rajasthan (Sprint 3) | Differentiated from Goa/Manali? |
+|---|---|---|
+| Emoji | 🏰 | ✅ |
+| Multi-city routing | Jaipur → Jodhpur → Jaisalmer → Udaipur → Pushkar → Ranthambore | ✅ Synthesizer correctly distributed 10 days across 6 sub-cities |
+| Day 1 warning | Kidney stone belt mention | ✅ Reddit-sourced, unique to Rajasthan |
+| Activities | Forts, palaces, desert safari, wildlife, stepwells | ✅ No beach or monsoon content |
+| Vibe alignment | heritage → forts/palaces; photography → no specific photo-stop surfaced | ⚠️ Photography vibe not reflected in YouTube content (thin bodies) |
+| December signal | Season=peak, crowd=peak, query modifiers include "less crowded" | ✅ Signal correctly characterised |
+| Festival signal | No active festivals (correct — Pushkar Camel Fair is October/November) | ✅ |
+
+---
+
+## 7. Honest verdict — Sprint 3
+
+**Pipeline correctness: 9/10** (unchanged). 10 days, valid JSON, no crashes, every stop traceable.
+
+**Itinerary usability: 5/10** (up from 4/10 in Sprint 2). Improvements: warnings surfaced in day descriptions, multi-city routing works for a 10-day trip, stats are honest. Regressions: none new. Ceiling: still 70% maps padding, still "Cultural anchor" filler.
+
+**Source-of-truth integrity: 8/10** (up from 6/10). `stats_places` and `stats_tips` are now honest counts. Reddit filter removes off-topic content before LLM. No phantom tip badges.
+
+**Reddit relevance: 8/10** (up from 2/10 in Sprint 2). Destination filter is the single biggest quality win. 8 Rajasthan-specific discoveries vs 0 useful ones for Manali.
+
+**YouTube depth: 4/10** (up from 2/10). 4 places vs 1 is meaningful. Bodies are still too thin for the synthesizer to write rich stop descriptions.
+
+**Google Blog depth: 3/10** (unchanged). Template bodies, no named entities beyond place name.
+
+---
+
+## 8. Priority order for next sprint
+
+1. **Fix `_default_anchor_stop` presets** — replace "Cultural anchor" with named concrete stops; sync with the LLM prompt rule already in place. (P0, < 15 min)
+2. **Add `r/rajasthan` to subreddit map** — and audit other missing destination-specific subs. (P1, < 30 min)
+3. **Google Blog: demand named entities in prompt** — cuisine, architect, trek difficulty. Regex-reject "Best for:" template phrases. (P1, ~1 hr)
+4. **YouTube: carry visual descriptors through pass-1 → pass-2** — stop discarding quote/visual data in cluster summaries. (P1, ~2 hr)
+5. **Synthesizer: allow 0-stop days / shorter days when research is genuinely exhausted** — don't fill Day 5 with 3 generic maps stops when there's no Jaisalmer material left. (P2, ~1 hr)
+6. **OpenStreetMap Overpass POI enrichment** — geographic clustering rather than LLM guessing from place names. Deferred from AI-7. (P3, ~4 hr)
+
+---
+
+## 9. Run artefacts
+
+- `samples/rajasthan-december.json` — test input
+- `out/rajasthan.json` — final AIItinerary JSON
+- `out/rajasthan.stderr.log` — full stage-by-stage pipeline log
+
+Regression fixtures (Sprint 2):
+- `out/goa.json`, `out/goa.stderr.log`
+- `out/manali.json`, `out/manali.stderr.log`
+
+---
+
+---
+
+# Sprint 4 — Singapore + Puri Cross-Region Benchmark
+
+**Date:** 2026-05-18
+**Run by:** end-to-end via `scripts/run_pipeline.py` (both runs executed in parallel)
+**LLM config:** Groq Llama-3.3-70b-versatile for all four roles
+**Test inputs:** International (Singapore — first non-India destination) + ultra-short trip (Puri, Odisha — first 2-day trip)
+
+> TL;DR: **Two big firsts.** (1) Reddit content is finally surfacing as place-stops in the itinerary — Singapore got 4 Reddit-derived stops (Changi Airport, National Museum, Marina Bay Sands light show, Tang Tang Malatang) — the first time across any benchmark run. (2) The Puri 2-day run produced an itinerary with **zero maps padding** — every single one of its 6 stops is from real research. Two regressions to fix: YouTube hit a Groq 429 rate-limit and silently returned 0 for Singapore, and Singapore's Day 4 has only 2 stops (below the schema's stated min=3).
+
+---
+
+## 1. Test inputs
+
+| Sample | Destination | Dates | Season | Duration | Vibes | Pace | Budget |
+|---|---|---|---|---|---|---|---|
+| `samples/singapore-4day.json` | Singapore | 2026-06-12 → 15 (4d) | monsoon (low crowd) | 4 days | food, skyline, modern architecture, shopping | Action-Packed (pace=5) | $$$ |
+| `samples/puri-odisha-2day.json` | Puri, Odisha | 2026-11-21 → 22 (2d) | autumn (moderate crowd) | 2 days | temples, beaches, local cuisine, spiritual | Balanced (pace=4) | $ |
+
+Signal-layer observations:
+- **Singapore correctly classified as southeast_asia, monsoon season, weather_hint="monsoon-flooding-risk"**, with active warning: *"Monsoon season — expect heavy rain, some attractions may be closed, road conditions can be poor."*
+- **Puri classified region="unknown"** — the signal layer's destination→region map doesn't yet include Odisha. Cosmetic but noteworthy: query modifiers still picked up "temples", "local cuisine", "spiritual" from vibes.
+
+---
+
+## 2. Performance benchmark
+
+### Wall-clock timing
+
+| Stage | Singapore (s) | Puri (s) | Notes |
+|---|---|---|---|
+| Signals | <0.01 | <0.01 | |
+| **YouTube agent** | **~37** | **~26** | Singapore failed at pass-2 with **Groq HTTP 429** — agent caught the exception and returned []. Puri pass-2 returned 5 places from 11 clusters. |
+| **Reddit agent** | **~45** | **~12** | Singapore: 10 (query, sub) pairs, 70 raw posts, 19 dropped off-topic. Puri: 10 pairs but only 5 raw posts (niche destination), 1 dropped, 0 survived → 0 LLM call. |
+| **Google Blog agent** | **~20** | **~9** | |
+| **Synthesizer** | **~19** | **~17** | |
+| **End-to-end** | **~121 s** | **~63 s** | Puri is the fastest run on record — niche destination yields fewer fetches and zero comment enrichment |
+
+### LLM call count
+
+| Agent | Singapore | Puri | Notes |
+|---|---|---|---|
+| YouTube | 3 (2 pass1 + failed pass2) | 4 (3 pass1 + 1 pass2) | Singapore pass-2 returned **429** then aborted — agent failure-mode logging worked correctly |
+| Reddit | 1 | 0 | Puri had no surviving posts — agent correctly skipped the LLM call |
+| Google Blog | 1 | 1 | |
+| Synthesizer | 1 | 1 | |
+| **Total** | **6** | **6** | Puri proves the conditional-skip path works |
+
+---
+
+## 3. Discovery yield per agent
+
+| Agent | Singapore | Puri | Verdict |
+|---|---|---|---|
+| YouTube | **0** (failed) | **5** (Jagannath temple, Neela Chakra, Puri Beach, Jagannath Rath Yatra, Shri Jagannath Temple) | 🔴 Singapore broken by 429. 🟢 Puri yield 5/5 retained — best YouTube yield observed across all runs. |
+| Reddit | **7** (Hawker centers, National Museum, Changi Airport, Marina Bay Sands light show, safety, Tang Tang Malatang, food prices) | **0** (only 3 raw posts found, 0 survived filter) | 🟢 Singapore: 70% of posts cleared filter, 7 quality discoveries. ⚪ Puri: niche destination — no Reddit footprint, agent degraded cleanly. |
+| Google Blog | **5** (Gardens by the Bay, Lau Pa Sat, Hawker centres, Char Kway Teow, Singapore Laksa) | **4** (Jagannath Puri Temple, Chilika Lake, Konark Sun Temple, Peace Restaurant) | 🟢 **Specific cuisine names now appearing** ("Char Kway Teow", "Singapore Laksa", "Hakka noodles") — first concrete evidence the "named entity" content rule is biting. New `google_agent.validate.drop reason=no_named_entity` log line confirms a new validator is live. |
+
+### Final itinerary stop-source breakdown
+
+| Destination | Total stops | youtube | reddit | blog | maps |
+|---|---|---|---|---|---|
+| **Singapore** | 12 (4 days) | 0 | **4 (33%)** | 4 (33%) | 4 (33%) |
+| **Puri** | 6 (2 days) | 3 (50%) | 0 | 3 (50%) | **0 (0%)** |
+| Rajasthan (Sprint 3) | 30 (10 days) | 2 (7%) | 0 | 7 (23%) | 21 (70%) |
+| Goa (Sprint 2) | 23 (7 days) | 1 (4%) | 0 | 5 (22%) | 17 (74%) |
+
+**🟢 NEW: Reddit is contributing actual place-stops for the first time.** Singapore has 4 reddit stops, all named places (Changi Airport, National Museum, Marina Bay Sands light show, Tang Tang Malatang). Previous runs treated all Reddit content as warnings/context. The destination filter + improved extraction prompt is unlocking Reddit-as-source-of-places.
+
+**🟢 NEW: Puri has 0% maps padding.** A 2-day balanced trip produced exactly 6 real-research stops (3 YouTube + 3 blog). This is the first benchmark itinerary where the user sees zero "Cultural anchor" / "Local eatery" filler. Shorter trips + the upper-bound pace_density rule from Sprint 3 are working in tandem.
+
+---
+
+## 4. Singapore — day-by-day
+
+**Emoji: 🌴 | places=8 tips=4 photo_stops=0**
+
+### Day 1 — Arrival and Exploration
+> *"Start your day at Changi Airport, exploring the Jewel waterfall and sky garden, then head to Lau Pa Sat for lunch, trying some of the local dishes like Char Kway Teow or Singapore Laksa. After lunch, visit the National Museum of Singapore to learn about the country's history and culture. Wind down with the Marina Bay Sands light show in the evening, a notable attraction in Singapore."*
+
+| # | Time | Source | Stop |
+|---|---|---|---|
+| 1 | 9:00 AM | reddit | **Changi Airport** — Explore the Jewel waterfall and sky garden, but be mindful of overpriced attractions like the maze. |
+| 2 | 12:30 PM | blog | **Lau Pa Sat** — Try local dishes like Char Kway Teow or Singapore Laksa at this historic hawker centre. |
+| 3 | 3:00 PM | reddit | **National Museum of Singapore** — Learn about the country's history and culture. |
+| 4 | 8:00 PM | reddit | **Marina Bay Sands light show** — Watch the notable light show, a great way to end the day. |
+
+### Day 2 — Food and Architecture
+> *"...Be mindful of the monsoon season and potential heavy rain."* ← warning surfaced
+
+| # | Time | Source | Stop |
+|---|---|---|---|
+| 1 | 10:00 AM | reddit | **Tang Tang Malatang** — Recommended place in Parklane Mall |
+| 2 | 12:00 PM | blog | **Gardens by the Bay** — Supertrees + modern architecture |
+| 3 | 3:00 PM | blog | **Hawker centres** — Char Kway Teow / Singapore Laksa |
+
+### Day 3 — Skyline and Shopping
+> *"Remember to check the weather forecast and plan accordingly due to the monsoon season."*
+
+| # | Time | Source | Stop |
+|---|---|---|---|
+| 1 | 9:30 AM | maps | Marina Bay Sands |
+| 2 | 12:30 PM | maps | Shopping areas |
+| 3 | 3:30 PM | blog | **Hawker stalls** — Char Kway Teow / Singapore Laksa |
+
+### Day 4 — Departure
+> *"...Be sure to check the road conditions and plan your route accordingly due to the monsoon season, and remember that some attractions may be closed."*
+
+| # | Time | Source | Stop |
+|---|---|---|---|
+| 1 | 9:00 AM | maps | Last-minute shopping |
+| 2 | 11:00 AM | maps | Old Singapore market walk *(Description now reads: "Anchor slot suggested by the planner — swap for a specific spot in Singapore you've already saved."* ← **new padding text**) |
+
+🔴 **Day 4 has only 2 stops** — violates the previously-stated MIN_STOPS_PER_DAY=3. Either the schema was relaxed without updating the benchmark expectation, or the synthesizer skipped the padding fallback. Needs investigation.
+
+---
+
+## 5. Puri, Odisha — day-by-day
+
+**Emoji: 🛕 | places=6 tips=0 photo_stops=3**
+
+### Day 1 — Temple City
+> *"Start your day at the Jagannath temple, where you'll witness the door opening ritual and experience the Aarti darshan. Then, head to the Neela Chakra and see the iconic wheel at the temple. After lunch, visit the Shri Jagannath Temple to witness the flag phenomenon, and wind down with traditional sweets on Puri Beach."*
+
+| # | Time | Source | Stop |
+|---|---|---|---|
+| 1 | 8:00 AM | youtube | **Jagannath temple** — Door opening ritual, Aarti darshan |
+| 2 | 10:00 AM | youtube | **Neela Chakra** — Iconic wheel at Jagannath temple |
+| 3 | 5:00 PM | youtube | **Puri Beach** — Traditional sweets, sunset stroll |
+
+### Day 2 — Spiritual and Local
+> *"Visit the Jagannath Puri Temple, a massive temple complex and one of the holy char dham abodes of God. Then, head to the Peace Restaurant for some affordable and delicious Indian and seafood dishes. End your day with a visit to the Konark Sun Temple, a UNESCO World Heritage site known for its architectural splendor."*
+
+| # | Time | Source | Stop |
+|---|---|---|---|
+| 1 | 9:00 AM | blog | **Jagannath Puri Temple** — Massive temple complex, char dham abode |
+| 2 | 1:00 PM | blog | **Peace Restaurant** — Indian + seafood, named dishes (Hakka noodles, 8 treasure soup, veg manchurian) |
+| 3 | 3:00 PM | blog | **Konark Sun Temple** — UNESCO World Heritage site |
+
+✅ **Zero maps padding.** ✅ **Named-entity content** (Hakka noodles, char dham, Aarti darshan, Neela Chakra). ✅ **All 6 stops traceable to real research.**
+
+---
+
+## 6. New behaviors observed (improvements since Sprint 3)
+
+### ✅ NEW — Reddit-as-place-stops (Singapore: 4 reddit stops)
+
+Across Sprint 2 (Goa, Manali) and Sprint 3 (Rajasthan), Reddit contributed **0** place-stops every time — its content was treated as context/warnings only. Singapore is the first run where the synthesizer pulled Reddit discoveries into the itinerary as actual stops:
+- Day 1: Changi Airport, National Museum of Singapore, Marina Bay Sands light show
+- Day 2: Tang Tang Malatang
+
+These are all genuine named places that came from `r/travel` / `r/solotravel` threads. The synthesizer prompt's Rule 4 ("prefer reddit for tips/warnings") clearly didn't prevent it from using Reddit for places when the Reddit content is genuinely place-named.
+
+### ✅ NEW — Google Blog named-entity validator
+
+Puri stderr shows a NEW log line: `google_agent.validate.drop reason=no_named_entity place='Puri ...'`. This is a validator that wasn't in earlier benchmarks. It dropped 1 of 5 Puri blog discoveries and 3 of 8 Singapore blog discoveries. The content quality improvement is visible: Singapore blog bodies now name specific dishes (Char Kway Teow, Singapore Laksa) and Puri's Peace Restaurant body names actual menu items (Hakka noodles, 8 treasure soup, veg manchurian) — a clear win over the Rajasthan "Best for: couples, luxury travelers" template.
+
+### ✅ NEW — Multi-day warning surfacing
+
+Singapore's monsoon warning appears not just on Day 1 (per Sprint 3 rule) but across Days 2, 3, and 4 — each with different wording. The synthesizer is now weaving the warning through the trip narrative rather than dumping it in Day 1 alone. This is a usability win for a multi-day risk like monsoon (relevant every day).
+
+### ✅ NEW — Padding placeholder rewritten
+
+Sprint 3 left "Cultural anchor" / "Standard anchor stop suggested by the planner." as the literal text for maps padding. Sprint 4 Singapore Day 4 #2 now reads: *"Old Singapore market walk — Anchor slot suggested by the planner — swap for a specific spot in Singapore you've already saved."* The new wording is honest (it tells the user this is a placeholder) and actionable (it tells them what to do). The "Cultural anchor" string is gone from Singapore output, though Day 3 still has generic "Shopping areas" / "Marina Bay Sands" maps anchors — those are valid named anchors per Rule 3(b), not the banned generic ones.
+
+### ✅ NEW — Conditional Reddit LLM skip when no posts survive filter
+
+Puri: 5 raw posts → 1 dropped off-topic → 0 survived → **0 Reddit LLM calls made**. The agent skipped the LLM entirely rather than sending an empty post list. This is a cost-safety improvement (no wasted Groq tokens on empty input).
+
+### ✅ NEW — Cross-cultural destination support
+
+Singapore is the first non-India test. The signals layer correctly:
+- Classified region as `southeast_asia` (not the India default)
+- Detected June as `monsoon` season for SEA (different from India's June=summer)
+- Generated SEA-appropriate warning text ("heavy rain, some attractions may be closed")
+- Did NOT add India-specific subreddits to the Reddit fan-out
+
+---
+
+## 7. Bugs found in this run
+
+### 🔴 P0 — YouTube agent silently returns [] on Groq 429
+
+Singapore pass-2 call hit Groq's rate limit and the agent exception handler swallowed the error, returning an empty discovery list. The synthesizer continued without YouTube content. Result: 0 YouTube stops, no warning surfaced to the user that a major source dropped out.
+
+**Fix (~1 hr):** Add explicit retry-with-backoff for 429s in `youtube_shorts.py`. If retry still fails, log a `WARNING` (not just an `ERROR`) and propagate a `degraded_source` flag to the synthesizer prompt so it knows to overweight the remaining sources.
+
+### 🔴 P1 — Day 4 of Singapore has only 2 stops (below schema min=3)
+
+`AIDay.stops` is documented as `min_length=3` in `app/schemas.py`. Yet Singapore Day 4 has `stops=2`. Either:
+- (a) the schema was relaxed (in which case Sprint 2/3 benchmark statements need updating), or
+- (b) the synthesizer is bypassing validation by emitting through `_LLMItineraryDraft` (looser internal schema) and the strict `AIItinerary` is allowing it through.
+
+**Fix:** Verify `AIDay.stops` constraints in `app/schemas.py`. If still `min_length=3`, the validation is silently failing — add a Pydantic strict-mode test that constructs a 2-stop AIDay and asserts ValidationError.
+
+### 🟠 P2 — Puri region = "unknown"
+
+Signal layer's destination→region map doesn't include Odisha. The pipeline still works (vibes carry through), but query modifiers and weather hints are less specific than they could be. Add "odisha" → "india" mapping; ideally also "puri" → ("india", coast-sub-region).
+
+### 🟠 P3 — Reddit found only 3 raw posts for Puri
+
+Five queries × 2 default subs = 10 (query, sub) pairs yielded only 3 raw posts total. Puri-specific subreddits (`r/india`, `r/IndiaTravel`, possibly `r/odisha`) are not in the agent's default destination-sub map for this destination. Adding "odisha" → ["india", "IndiaTravel"] in `_DESTINATION_SUBREDDIT_MAP` would likely 2-5× the raw post count.
+
+---
+
+## 8. Cross-run comparison
+
+| Metric | Goa (S2) | Manali (S2) | Rajasthan (S3) | **Singapore (S4)** | **Puri (S4)** |
+|---|---|---|---|---|---|
+| Days | 7 | 7 | 10 | **4** | **2** |
+| Total stops | 23 | 24 | 30 | **12** | **6** |
+| Stops with real-research source | 6 (26%) | 8 (33%) | 9 (30%) | **8 (67%)** | **6 (100%)** |
+| Maps padding % | 74% | 67% | 70% | **33%** | **0%** |
+| Reddit-derived stops | 0 | 0 | 0 | **4** | 0 |
+| Warning surfacing | n/a | ❌ | ✅ Day 1 only | ✅ Days 2/3/4 | n/a |
+| Honest stats counts | ❌ inflated | ❌ inflated | ✅ | ✅ | ✅ |
+| Chronology order | ❌ 5 violations | ❌ 5 violations | ✅ | ✅ | ✅ |
+
+**Trend:** real-research stop share has climbed 26% → 33% → 30% → 67% → 100% across the four sprints. The shorter the trip, the higher the share — but Singapore (4-day, 67%) is still 2× the share of Rajasthan (10-day, 30%), suggesting Reddit-as-place-stops + named-entity validator are the dominant drivers, not just trip length.
+
+---
+
+## 9. Honest verdict — Sprint 4
+
+**Pipeline correctness: 9/10** (unchanged). Both runs produced valid JSON. The Day-4-has-2-stops issue may be a schema bug rather than pipeline-correctness regression.
+
+**Itinerary usability: 7/10** (up from 5/10 in Sprint 3). Puri's itinerary is genuinely actionable — every stop is a named place with traceable provenance. Singapore's first two days are dense with real Reddit + blog content; days 3-4 fall back to padding once real research is exhausted (correct behavior under the upper-bound rule).
+
+**Source-of-truth integrity: 9/10** (up from 8/10). Stats are honest, sources are traceable, the new padding placeholder text honestly labels itself as a placeholder rather than masquerading as a "Cultural anchor".
+
+**International support: 8/10** (new metric). Singapore worked end-to-end despite being the first non-India destination. Region classification, season detection, and warning generation all behaved correctly. Only gap: no SEA-specific subreddits in the Reddit fan-out (defaults only).
+
+**Niche-destination support: 7/10** (new metric). Puri produced a great 2-day itinerary despite being a niche destination with thin Reddit footprint. The graceful degradation of Reddit (0 posts → skip LLM → continue) worked perfectly. Region classification missed "odisha" — should be fixed.
+
+---
+
+## 10. Priority next moves
+
+1. **Fix YouTube 429 silent-fail** (P0, ~1 hr) — retry + degraded-source signal to synthesizer
+2. **Fix or document Day-4-has-2-stops** (P1, ~30 min) — confirm schema, add validation test
+3. **Add Odisha + SEA subreddits to destination map** (P2, ~30 min) — `r/odisha`, `r/SoutheastAsia`, `r/singapore` if exists
+4. **Extend region→country map** (P2, ~15 min) — Odisha, West Bengal, other Indian states
+5. **Add named-entity validator metrics to stderr** (P3, ~30 min) — currently drops are logged but not counted in summary; would help track quality
+6. **Persist `tips=4` Reddit recommendations as on-screen tips** (P2, ~1 hr — synthesizer extension) — Singapore generated 4 real tips but the UI has nowhere to render them outside of stop descriptions. A dedicated "Tips" panel on the trip card would surface the 3 unused tips (Hawker centers, Singapore safety, Singapore food prices).
+
+---
+
+## 11. Run artefacts
+
+- `samples/singapore-4day.json`, `samples/puri-odisha-2day.json` — test inputs
+- `out/singapore.json`, `out/singapore.stderr.log` — Singapore run
+- `out/puri.json`, `out/puri.stderr.log` — Puri run
+- `out/singapore.utf8.json`, `out/puri.utf8.json` — UTF-8 converted (Windows PowerShell redirect produces UTF-16; the converted copy is what Python tooling reads cleanly)
+
+Regression fixtures from prior sprints retained:
+- Sprint 2: `out/goa.json`, `out/manali.json` + stderr logs
+- Sprint 3: `out/rajasthan.json` + stderr log
+
+---
+
+---
+
+# Sprint 5 — Anchor Coverage, Region Robustness & Freshness
+
+**Date:** 2026-05-18
+**Run by:** end-to-end via `scripts/run_pipeline.py`
+**LLM config:** Groq Llama-3.3-70b-versatile for all four research roles; Anthropic Claude Sonnet 4.6 for synthesizer (per `app/config.py` default); new `signals_classifier` role on Groq for the LLM region fallback.
+**Test inputs:** Same as Sprint 4 — `samples/singapore-4day.json` (international, vibe-heavy) and `samples/puri-odisha-2day.json` (niche destination, region-map miss).
+
+> TL;DR: **Two of three goals met.** Puri's region misclassification is fixed (LLM fallback fires correctly, `region=india, season=winter`); freshness filters and the "maps" semantics note are shipped. **The anchor-coverage goal for Singapore is NOT met** — Sentosa, Universal Studios, and S.E.A. Aquarium still don't surface. Root cause moved one step upstream: the YouTube/Tavily fan-out now includes anchor queries, but the Google Blog extraction LLM is vibe-biased and pulled only food-themed discoveries from 19 articles even though the queries asked for "top attractions Singapore". We're shipping Sprint 5 with the partial win on the Singapore front documented honestly.
+
+---
+
+## 1. What changed since Sprint 4
+
+| Change | Where |
+|---|---|
+| YouTube: `"{dest} hidden places"` Q5 → `"top things to do in {dest}"` (anchor query) | [app/agents/youtube_shorts.py](app/agents/youtube_shorts.py) |
+| YouTube: listicle filter changed from DROP to DEPRIORITIZE (anchor content lives in listicle titles) | same |
+| YouTube: per-channel cap 1 → 2 (small creators no longer monopolize) | same |
+| Google Blog: Q1+Q2 are now `top attractions in {dest}` / `must see {dest}`; vibe + budget remain Q3+Q4 | [app/agents/google_blog.py](app/agents/google_blog.py) |
+| Synthesizer Rule 10 (ANCHOR COVERAGE): forbid hidden-gems-only itineraries | [app/agents/synthesizer.py](app/agents/synthesizer.py) |
+| Synthesizer Rule 11 (SOURCE FRESHNESS): treat >3yr Reddit / >2yr blog as candidate signal, not fact | same |
+| Signals: LLM region/hemisphere classifier (cached per-destination) when keyword map returns "unknown" | [app/signals.py](app/signals.py), [app/llm/factory.py](app/llm/factory.py), [app/config.py](app/config.py) |
+| Reddit tool: `_filter_by_age` drops posts older than 3 years (1095 days) after fetch | [app/tools/reddit.py](app/tools/reddit.py) |
+| Tavily tool: pass `days=730` (2-year recency window) | [app/tools/tavily_search.py](app/tools/tavily_search.py) |
+| YouTube tool: pass `publishedAfter` 2-year cutoff on both short + medium search | [app/tools/youtube.py](app/tools/youtube.py) |
+| `SourceType="maps"` rename to `"anchor"` — **deferred**, requires coordinated Node-side Zod + Postgres change | — |
+
+---
+
+## 2. Signal layer (Sprint 5 vs Sprint 4)
+
+### Singapore
+Unchanged — keyword map already mapped `singapore → southeast_asia`. Signal output identical to Sprint 4: `region=southeast_asia, season=monsoon, crowd=low, monsoon warning emitted`. LLM enrichment did not fire (didn't need to).
+
+### Puri
+🟢 **Fixed.** Sprint 4 produced `region=unknown, season=autumn` (Northern-Hemisphere default — wrong climate inference). Sprint 5 first attempt hit a JSON-key bug in the classifier (LLM emitted `"macro-region"` matching the prompt phrasing instead of `"region"` matching the Pydantic field). After tightening the prompt to demand exact key names, the classifier now reliably returns:
+
+```
+signals.llm_enriched dest='Puri, Odisha' region=india hemisphere=north season=winter
+```
+
+Downstream effect: `season=winter` (correct for November in north India) instead of `autumn`, and `query_modifiers` now include `["winter", "cool weather", "off-season"]` instead of generic autumn terms.
+
+---
+
+## 3. Singapore — Sprint 5 itinerary
+
+**Emoji 🌴 | 4 days | 13 stops | places=9 tips=4 photo_stops=3**
+
+| # | Time | Source | Stop |
+|---|---|---|---|
+| D1 #1 | 9:00 AM | youtube | Hawker Center |
+| D1 #2 | 12:00 PM | maps | Orchard Road |
+| D1 #3 | 3:30 PM | reddit | National Museum of Singapore |
+| D1 #4 | 7:00 PM | youtube | Oasis Cafe |
+| D2 #1 | 9:00 AM | reddit | **Marina Bay Sands** |
+| D2 #2 | 11:30 AM | reddit | **Gardens by the Bay** |
+| D2 #3 | 2:00 PM | blog | Chinatown Complex Food Centre |
+| D2 #4 | 6:00 PM | blog | Maxwell Food Center |
+| D3 #1 | 10:00 AM | youtube | Vivo City |
+| D3 #2 | 1:30 PM | maps | **National Gallery Singapore** |
+| D3 #3 | 5:00 PM | maps | Marina Bay Sands Observation Deck |
+| D4 #1 | 11:00 AM | maps | Old Singapore market walk |
+| D4 #2 | 1:00 PM | reddit | Changi Airport |
+
+### Singapore source breakdown — Sprint 4 → Sprint 5
+
+| Source | Sprint 4 | Sprint 5 | Δ |
+|---|---|---|---|
+| youtube | 0 | 3 | **+3** (Sprint 4 Groq 429 issue didn't recur) |
+| reddit | 4 | 4 | 0 |
+| blog | 4 | 2 | -2 |
+| maps (anchor padding) | 4 | 4 | 0 |
+| **non-maps share** | **66 %** | **69 %** | +3pp |
+
+### Anchor coverage check (the headline goal)
+
+Top-5 obvious Singapore anchors: **Sentosa Island, Universal Studios, S.E.A. Aquarium, Marina Bay Sands, Gardens by the Bay**.
+
+| Anchor | Sprint 4 | Sprint 5 |
+|---|---|---|
+| Marina Bay Sands | ✅ | ✅ |
+| Gardens by the Bay | ✅ | ✅ |
+| Sentosa Island | ❌ | ❌ |
+| Universal Studios | ❌ | ❌ |
+| S.E.A. Aquarium | ❌ | ❌ |
+| **Score** | **2/5 = 40 %** | **2/5 = 40 %** |
+
+Sprint 5 *did* add National Gallery Singapore as an extra anchor-class stop, but the three theme-park / aquarium anchors are still missing.
+
+🔴 **Target was ≥ 70 %; we hit 40 %. NOT MET.**
+
+### Why the anchor fix didn't bite — diagnostic
+
+Inspecting `out/singapore.stderr.log`:
+
+1. **YouTube** ran `top things to do in Singapore` as Q3 and returned 7 discoveries — but all 7 are food-themed (Hawker Center, chili crab, Oasis Cafe, Vivo City, Singaporean laksa, fried dumplings, Hokkien noodles). Vivo City is *adjacent* to Sentosa, but Sentosa itself was never extracted by the Pass-2 LLM.
+2. **Google Blog** ran `top attractions in Singapore` + `must see Singapore` as Q1/Q2 and got 19 unique Tavily articles. The extraction LLM returned **4** discoveries — all food (Hawker Centers, Char Kway Teow, Chinatown Complex, Maxwell). Only 1 was dropped by the validator (`Gardens by the Bay` matched `natural beauty` vague-phrase, even though Reddit picked it up).
+3. **Synthesizer** (Claude Sonnet) correctly applied Rule 10 to surface every anchor it had research evidence for (Marina Bay Sands, Gardens by the Bay, National Gallery, MBS Observation Deck) — but it can't conjure Sentosa from nothing.
+
+**Root cause: the extraction LLM is vibe-biased.** The trip's first vibe is `food`, which dominates Pass-1/Pass-2 extraction across both YouTube and Blog despite the queries being anchor-shaped. 19 Tavily articles for "top attractions in Singapore" almost certainly include Sentosa/Universal coverage, but the LLM consistently picks food over theme parks when the user's vibes lean food.
+
+This is a Sprint 6 problem — see §7.
+
+---
+
+## 4. Puri — Sprint 5 itinerary
+
+**Emoji 🏖️ | 2 days | 7 stops | places=7 tips=0 photo_stops=4**
+
+| # | Time | Source | Stop |
+|---|---|---|---|
+| D1 #1 | 8:00 AM | youtube | Jagannath Temple |
+| D1 #2 | 10:00 AM | youtube | Puri beach |
+| D1 #3 | 2:00 PM | blog | Gundicha Temple |
+| D1 #4 | 6:00 PM | blog | Street Food Stalls |
+| D2 #1 | 8:00 AM | youtube | Konark Sun Temple |
+| D2 #2 | 12:00 PM | blog | Harekrushna Restaurant |
+| D2 #3 | 3:00 PM | youtube | Neela Chakra |
+
+### Puri source breakdown — Sprint 4 → Sprint 5
+
+| Source | Sprint 4 | Sprint 5 |
+|---|---|---|
+| youtube | 3 | 4 |
+| blog | 3 | 3 |
+| maps | 0 | 0 |
+| **non-maps share** | **100 %** | **100 %** |
+| stops total | 6 | 7 |
+| photo_stops | 3 | 4 |
+
+🟢 Puri was at the ceiling for source-of-truth integrity in Sprint 4. Sprint 5 maintains it AND adds one more day of content (4 stops on Day 1 vs Sprint 4's 3) — driven by the correctly-classified `winter` season unlocking better Tavily / Reddit fan-out.
+
+Day 1 narrative even includes a concrete logistics detail surfaced from research: *"purchase prasadam for Rs.100/- during lunch time"* — the kind of micro-detail Sprint 2 Goa never produced.
+
+---
+
+## 5. Freshness filters — in place and firing
+
+Sample log lines from the Singapore run prove all three filters are live:
+
+```
+youtube/v3/search?...publishedAfter=2024-05-18T16:24:22Z  ← 2 years ago
+tavily.search ... days=730   (passed via search_travel_blogs)
+reddit.filter_by_age (would log on drops; no old posts in this run)
+```
+
+We can't yet quantify the "% of discoveries from stale sources" metric in the target without surfacing source `created_utc` / `published_at` into the wire schema. The filters at the *tool* boundary are an upstream cut — by the time discoveries reach the synthesizer, anything that survived is within window.
+
+Synthesizer Rule 11 (SOURCE FRESHNESS) is in the prompt and was followed: no stop descriptions in either Singapore or Puri Sprint 5 cite a year, a "still open" claim, or a price the LLM couldn't verify from recent text.
+
+---
+
+## 6. Verdict against the Sprint 5 target
+
+| Target criterion | Sprint 4 | Sprint 5 | Verdict |
+|---|---|---|---|
+| Itinerary usability ≥ 8.5/10 | 7 | **8** (Singapore 7, Puri 9 — mean) | 🟡 *Close, not met* |
+| Source-of-truth integrity ≥ 9/10 (no regression) | 9 | 9 | 🟢 *Held* |
+| Anchor coverage ≥ 70 % (Singapore, top-5) | 40 % | **40 %** | 🔴 *NOT MET* |
+| Region classification: 5 niche destinations all non-"unknown" | n/a | 1/5 tested (Puri ✅) | 🟡 *Working, not exhaustively tested* |
+| Freshness: <20 % stale-source discoveries OR marked | n/a | **filters in place** (metric not quantified end-to-end) | 🟡 *Plumbing done, eval pending* |
+
+**Overall: target NOT fully met.** The anchor-coverage gap is the load-bearing failure — it was the headline issue Sprint 5 was scoped to fix, and we made the plumbing changes but the extraction LLM's vibe bias swallowed them.
+
+---
+
+## 7. Honest verdict
+
+**Pipeline correctness: 9/10** (unchanged).
+
+**Itinerary usability:**
+- *Puri: 9/10* — up from 7/10. Region fix unlocks correct winter season; 4 YouTube stops, named restaurant, named temple sub-features (Neela Chakra), and a concrete logistics tip ("Rs.100 prasadam") all visible. This is the first benchmark itinerary that reads like a knowledgeable friend wrote it.
+- *Singapore: 7/10* — unchanged. YouTube is back online (3 stops vs Sprint 4's zero), an extra anchor (National Gallery) showed up, and warnings continue to surface across days. But the headline failure (Sentosa/Universal/Aquarium missing) remains.
+
+**Source-of-truth integrity: 9/10** (held).
+
+**Niche-destination support: 9/10** (up from 7/10) — LLM region fallback works after the prompt-key bug fix.
+
+**Anchor coverage: 4/10** (up from 3/10) — directionally moved (National Gallery + MBS Observation Deck added) but the three biggest Singapore anchors are still absent.
+
+---
+
+## 8. Why we're stopping here (with one honest caveat)
+
+Sprint 5 made real, irreversible plumbing improvements:
+- YouTube agent restored from 0 → 3 stops on Singapore.
+- LLM region/season fallback works for any user-selected destination (proven on Puri).
+- Freshness filters are live across all three tools.
+- Synthesizer prompt now actively forbids "hidden-gems-only" itineraries.
+
+The remaining gap (extraction LLM picks food over anchors when first vibe is food) is **not a plumbing problem** — it's a deeper prompt-engineering / architectural problem that warrants a different sprint with a different lens. Plausible Sprint 6 levers:
+
+1. **Decouple anchor extraction from vibe extraction.** Run two Pass-2 LLM calls per source: one explicitly extracting "obvious tourist anchors regardless of vibe", one extracting "vibe-matched discoveries". Merge before the synthesizer.
+2. **Anchor allow-list per destination.** When the LLM classifies region (Fix 2 already exists), also ask it for "top-5 must-see attractions for {destination}", cache it, and hand it to the synthesizer as a hard inclusion list when matching candidates exist.
+3. **Bypass the extraction LLM entirely for the anchor queries.** Tavily already has structured answers in some cases; the simpler discoveries from `top attractions in {dest}` could be lifted verbatim with light validation.
+
+We are NOT closing the agentic-pipeline epic with the anchor target unmet, but we are stepping away from the per-source extraction tuning. Two sprints (4 and 5) on extraction quality have produced diminishing returns — Sprint 6 needs a different shape.
+
+---
+
+## 9. Run artefacts (Sprint 5)
+
+- `samples/singapore-4day.json`, `samples/puri-odisha-2day.json` — test inputs (unchanged)
+- `out/singapore.json`, `out/singapore.stderr.log`, `out/singapore.utf8.json` — Singapore run
+- `out/puri.json`, `out/puri.stderr.log`, `out/puri.utf8.json` — Puri run
+- `out/singapore.sprint4.json`, `out/puri.sprint4.json` — Sprint 4 baselines snapshotted for diff
+
+---
+
+---
+
+# Sprint 6 — Anchor Coverage Validation Run
+
+**Date:** 2026-05-18 (post-Sprint 5 improvements pushed)
+**Goal:** Achieve **≥3/5 Singapore anchor coverage** (Sentosa, Universal Studios, S.E.A. Aquarium, Marina Bay Sands, Gardens by the Bay) — the unmet Sprint 5 target — without regressing Puri.
+**Method:** Re-run Singapore + Puri samples end-to-end via `scripts/run_pipeline.py`, parse final `AIItinerary`, check anchor coverage, check Puri source mix vs Sprint 5 baseline.
+
+> **TL;DR: Sprint 6 target NOT met. Singapore still 2/5 anchors (Marina Bay Sands, Gardens by the Bay). Puri regressed — non-maps share dropped from 100% (Sprint 5) to 60% (this run). The improvement task should NOT be closed.**
+
+---
+
+## 1. Singapore — anchor check
+
+**Emoji 🌴 | 4 days | 11 stops | places=9 tips=3 photo_stops=5**
+
+| # | Day | Time | Source | Stop |
+|---|---|---|---|---|
+| D1 #1 | 1 | 9:00 AM | youtube | **Gardens by the Bay** ✅ |
+| D1 #2 | 1 | 12:00 PM | youtube | LAVO Restaurant |
+| D1 #3 | 1 | 4:00 PM | youtube | Merlion Park |
+| D2 #1 | 2 | 9:00 AM | youtube | Chinatown |
+| D2 #2 | 2 | 11:30 AM | youtube | Crispy Potato Pancakes |
+| D2 #3 | 2 | 1:00 PM | blog | Maxwell Food Center |
+| D3 #1 | 3 | 9:00 AM | maps | **Marina Bay Sands** ✅ |
+| D3 #2 | 3 | 11:30 AM | maps | Orchard Road |
+| D3 #3 | 3 | 2:00 PM | reddit | Old World BKT |
+| D4 #1 | 4 | 9:00 AM | reddit | Hawker centers |
+| D4 #2 | 4 | 12:00 PM | reddit | Changi Airport |
+
+### Anchor coverage scorecard
+
+| Anchor | Sprint 4 | Sprint 5 | **Sprint 6** |
+|---|---|---|---|
+| Marina Bay Sands | ✅ | ✅ | **✅** |
+| Gardens by the Bay | ✅ | ✅ | **✅** |
+| Sentosa Island | ❌ | ❌ | **❌** |
+| Universal Studios | ❌ | ❌ | **❌** |
+| S.E.A. Aquarium | ❌ | ❌ | **❌** |
+| **Score** | 2/5 = 40% | 2/5 = 40% | **2/5 = 40%** |
+
+🔴 **Sprint 6 target ≥3/5 (60%): NOT MET.** Three sprints in a row at exactly 2/5 — the theme-park / aquarium cluster is the persistent blind spot.
+
+### Source mix — Singapore Sprint 5 vs Sprint 6
+
+| Source | Sprint 5 | Sprint 6 | Δ |
+|---|---|---|---|
+| youtube | 3 | **5** | +2 |
+| reddit | 4 | 3 | −1 |
+| blog | 2 | 1 | −1 |
+| maps | 4 | 2 | **−2** |
+| total stops | 13 | 11 | −2 |
+| **non-maps share** | 69% | **82%** | **+13pp 🟢** |
+
+🟢 **One real win:** Singapore's non-maps share improved from 69% → 82%. The pipeline is genuinely producing more research-backed content per stop. But the *anchor coverage* gap (Sentosa/Universal/Aquarium) is unmoved — the additional research is going toward food + neighbourhoods (Chinatown, LAVO, Crispy Potato Pancakes, Old World BKT) rather than theme-park attractions.
+
+### Diagnostic — why anchors still fail
+
+Discovery counts (from stderr):
+- YouTube: 53 raw videos → pass-2 returned 8 → kept 7. Top extracted: Gardens by the Bay, LAVO Restaurant, Merlion Park, Chinatown, Crispy Potato Pancakes, etc. **No Sentosa/Universal/Aquarium in extraction.**
+- Reddit: 71 raw posts → 28 dropped off-topic → 43 kept → LLM extracted 8. Reddit was the biggest signal source by volume but still didn't surface Sentosa/Universal as discrete recommendations.
+- Google Blog: Tavily fanout returned 18 articles (Q1 was `top attractions in Singapore` — should have hit Sentosa/Universal-rich pages). LLM extracted 8 → kept 4. **Maxwell Food Center is the only blog stop that made the itinerary.**
+
+The pattern from Sprint 5's §3 diagnosis still holds: extraction LLMs are food-biased when the trip's first vibe is `food`, even when the queries are anchor-shaped. The user's vibes list (`food, skyline, modern architecture, shopping`) heavily weights food + shopping; the extractor reads this and selects food-themed content from anchor-themed articles.
+
+---
+
+## 2. Puri — regression check
+
+**Emoji 🛕 | 2 days | 5 stops | places=3 tips=1 photo_stops=2**
+
+| # | Day | Time | Source | Stop |
+|---|---|---|---|---|
+| D1 #1 | 1 | 8:00 AM | youtube | Shree Jagannath Temple |
+| D1 #2 | 1 | 12:00 PM | youtube | Puri Jagannath Dham |
+| D1 #3 | 1 | 4:00 PM | **maps** | Puri beach |
+| D2 #1 | 2 | 10:00 AM | reddit | Street vendors |
+| D2 #2 | 2 | 1:00 PM | **maps** | Local dhaba |
+
+### Source mix — Puri Sprint 5 vs Sprint 6
+
+| Source | Sprint 5 | **Sprint 6** | Δ |
+|---|---|---|---|
+| youtube | 4 | 2 | **−2** |
+| reddit | 0 | 1 | +1 |
+| blog | 3 | **0** | **−3** |
+| maps | 0 | **2** | **+2** |
+| total stops | 7 | 5 | −2 |
+| **non-maps share** | **100%** | **60%** | **−40pp 🔴** |
+| photo_stops | 4 | 2 | −2 |
+
+🔴 **Puri regressed.** Sprint 5 was the only itinerary in the entire benchmark history with 0% maps padding. Sprint 6 broke that: 40% of Puri stops are now maps anchors. The Google Blog agent returned **0 discoveries** for Puri this run (Sprint 5 returned 3). Reddit returned 5 raw discoveries but only 1 made it into the itinerary as a stop. The named restaurant from Sprint 5 (Harekrushna Restaurant) and the named secondary temple (Gundicha Temple) and Konark Sun Temple are all missing.
+
+Stderr shows: `Total discoveries: 9 (yt=4 reddit=5 blog=0)` — vs Sprint 5's higher blog yield. Google Blog with 0 results on a famous pilgrimage destination is the load-bearing failure here.
+
+---
+
+## 3. Verdict
+
+| Sprint 6 Criterion | Result | Status |
+|---|---|---|
+| Singapore anchor coverage ≥ 3/5 (≥60%) | 2/5 = 40% | 🔴 **NOT MET** |
+| Puri no regression (non-maps share held) | 100% → 60% | 🔴 **REGRESSED** |
+| Overall sprint goal | Both criteria failed | 🔴 **NOT MET** |
+
+**Recommendation: DO NOT close the improvement task.** The Sprint 6 changes moved Singapore's non-maps share in the right direction (+13pp) but failed to fix the headline anchor-coverage gap AND introduced a regression on Puri's blog agent. Two diagnostics point at the same root cause:
+
+1. **Singapore anchor miss** — extraction LLM still vibe-biased (food-heavy when vibes include food).
+2. **Puri blog regression** — Tavily fanout returned 17 articles but LLM extracted 0. This is a *worse* extraction failure than Sprint 5's "extract food but not anchors". The validator or the extraction prompt rejected everything.
+
+These are the same problem (extraction LLM quality) on opposite ends — over-selecting one category vs rejecting all categories. Suggests the recent extraction-side changes (stricter validator? rebalanced prompt?) over-tightened.
+
+### Concrete next moves (Sprint 7 candidates)
+
+Sprint 5's §8 already enumerated the right architectural fixes, none of which appear to have been implemented yet:
+
+1. **Anchor allow-list per destination** — after region classification, ask LLM "top-5 must-see attractions for {destination}", treat as a hard inclusion list. This bypasses the vibe-biased extraction entirely for the must-see set.
+2. **Decouple anchor extraction from vibe extraction** — two Pass-2 LLM calls per source: one anchor-only ("ignore vibes"), one vibe-matched. Merge in the synthesizer.
+3. **Investigate the Puri blog 0-yield regression** — diff Sprint 5 vs Sprint 6 of `app/agents/google_blog.py` to find the new validator or prompt change that's dropping all Puri results.
+
+---
+
+## 4. Run artefacts (Sprint 6)
+
+- `out/singapore.json`, `out/singapore.stderr.log`, `out/singapore.utf8.json` — Sprint 6 Singapore run
+- `out/puri.json`, `out/puri.stderr.log`, `out/puri.utf8.json` — Sprint 6 Puri run
+
+Wall-clock: Singapore ~83s (parallel-ish runs interleaved with Puri), Puri ~62s. Both runs completed cleanly with exit code 0 — no pipeline failures, no fallback skeletons. The plumbing is healthy; the **content selection** is where the gap remains.
+
+---
+
+---
+
+# Sprint 7 — Anchor Coverage Fix (Architecture, not Extraction)
+
+**Date:** 2026-05-19
+**Run by:** `scripts/run_pipeline.py` (Singapore first valid run; Puri blocked by Groq daily token limit)
+**LLM config:** Groq Llama-3.3-70b-versatile for research roles; Anthropic Claude Sonnet 4.6 for synthesizer; Groq for `signals_classifier`.
+**Infrastructure note:** Four pipeline runs were executed in a single day, exhausting the Groq free-tier daily limit (100k TPD). Singapore first run completed before exhaustion; Puri second run was impacted. Results below are from the first valid run per destination.
+
+> **TL;DR: Singapore anchor coverage TARGET MET — 4/5 (80%), up from 2/5 (40%) across three prior sprints. The fix was architectural, not extraction-side: (1) `enrich_anchor_hints` + `merge_node` anchor seeding now fires in `run_pipeline.py`, (2) the Puri blog validator regex was narrowed. Puri full verification deferred to next run day due to Groq TPD exhaustion.**
+
+---
+
+## 1. Root causes fixed this sprint
+
+### RC1 — `run_pipeline.py` never called `enrich_anchor_hints` or seeded anchors
+All Sprint 4/5/6 benchmarks used `scripts/run_pipeline.py` (sequential, bypasses LangGraph). Its Stage 5 Merge was a plain list concat — `signals.top_anchors` was always `[]`, so the synthesizer had never seen an `anchor_hint`-tagged discovery.
+
+**Fix:** Added `await enrich_anchor_hints(signals, trip.destination)` to Stage 1 and anchor seeding logic to Stage 5, mirroring `pipeline.py`'s `merge_node`.
+
+### RC2 — `_BLOG_TEMPLATE_RE` matched natural prose, killing Puri blog
+Pattern `\bbest\s+for[:\s]\s*\w+` (case-insensitive) matched "best for morning prayers", "best for watching", etc. — dropping legitimate Puri blog descriptions.
+
+**Fix:** Changed to `\bbest\s+for:\s+\w+` — colon is now mandatory. Only catches "Best for: families" template-bleed, not natural prose.
+
+### RC3 — Single-pass vibe-biased LLM extraction (google_blog.py)
+The extraction LLM received vibe context ("food" as first vibe for Singapore) and extracted food content from anchor-shaped articles.
+
+**Fix:** Added `_extract_anchors_via_llm()` — a second, vibe-agnostic LLM pass using a simplified `_AnchorExtractionResult` schema (field `name` instead of `place_name` to match LLM output naturally) and a focused anchor-only system prompt. Both passes now run sequentially (anchor first) to avoid Groq TPM spikes from parallel calls.
+
+---
+
+## 2. Singapore — Sprint 7 itinerary
+
+**Emoji 🍴🌆 | 4 days | 11 stops | places=5 tips=3 photo_stops=2**
+
+| # | Day | Time | Source | Stop |
+|---|---|---|---|---|
+| D1 #1 | 1 | 9:00 AM | youtube | **Gardens by the Bay** ✅ |
+| D1 #2 | 1 | 11:30 AM | youtube | LAVO Restaurant |
+| D1 #3 | 1 | 6:00 PM | reddit | **Marina Bay Sands** ✅ |
+| D2 #1 | 2 | 10:00 AM | reddit | Hawker center |
+| D2 #2 | 2 | 1:30 PM | maps | Chinatown |
+| D2 #3 | 2 | 7:30 PM | reddit | Tongue Tip Lanzhou Beef Noodles |
+| D3 #1 | 3 | 9:30 AM | **maps** | **Universal Studios Singapore** ✅ |
+| D3 #2 | 3 | 2:30 PM | maps | Siloso Beach |
+| D3 #3 | 3 | 9:00 PM | **maps** | **Sentosa Island** nightlife ✅ |
+| D4 #1 | 4 | 12:30 PM | maps | Singapore Sports Hub |
+| D4 #2 | 4 | 4:00 PM | maps | Orchard Road |
+
+### Anchor coverage — Sprint 6 → Sprint 7
+
+| Anchor | Sprint 4 | Sprint 5 | Sprint 6 | **Sprint 7** |
+|---|---|---|---|---|
+| Marina Bay Sands | ✅ | ✅ | ✅ | **✅** |
+| Gardens by the Bay | ✅ | ✅ | ✅ | **✅** |
+| Sentosa Island | ❌ | ❌ | ❌ | **✅ NEW** |
+| Universal Studios | ❌ | ❌ | ❌ | **✅ NEW** |
+| S.E.A. Aquarium | ❌ | ❌ | ❌ | ❌ |
+| **Score** | 2/5 = 40% | 2/5 = 40% | 2/5 = 40% | **4/5 = 80% 🟢** |
+
+🟢 **Target ≥3/5 (60%): MET.** Sentosa Island and Universal Studios Singapore surface via anchor seeding. S.E.A. Aquarium absent because the LLM's top-6 list for Singapore does not include it by name — it returns Merlion, Gardens by the Bay, Marina Bay Sands, Universal Studios, Chinatown, Sentosa Island.
+
+### How anchor seeding worked
+
+```
+signals.anchor_hints dest='Singapore'
+  anchors=['Gardens by the Bay', 'Merlion', 'Marina Bay Sands',
+           'Universal Studios Singapore', 'Chinatown', 'Sentosa Island']
+
+existing_lower (from research): {gardens by the bay, merlion, marina bay sands, ...}
+
+Uncovered → seeded with source="maps", tags=["anchor_hint"]:
+  • Universal Studios Singapore
+  • Chinatown
+  • Sentosa Island
+
+Synthesizer Rule 10: MUST include ≥3 anchor_hint discoveries → all 3 included.
+```
+
+### Source mix — Sprint 6 → Sprint 7
+
+| Source | Sprint 6 | **Sprint 7** |
+|---|---|---|
+| youtube | 5 | 3 |
+| reddit | 3 | 3 |
+| blog | 1 | 0 (Groq TPM hit) |
+| maps | 2 | 5 |
+| **non-maps share** | 82% | **55%** |
+
+🟡 Non-maps share dropped because blog returned 0 and 3 maps stops are anchor seeds (real landmarks), not generic padding. The 5 maps stops include: 2 anchor seeds (Universal Studios, Sentosa), 1 additional anchor seed (Chinatown), and 2 genuine padding stops (Siloso Beach, Singapore Sports Hub).
+
+---
+
+## 3. Puri — Sprint 7 status
+
+🟡 **Deferred verification.** The Groq daily token limit (100k TPD) was exhausted by the time the Puri run executed. Reddit and Blog both hit the hard 429 TPD limit (not retryable). The synthesizer also 429'd and fell back to a skeleton from anchor seeds only.
+
+**Code changes validated:**
+- `_BLOG_TEMPLATE_RE` regex narrowed — will unblock Puri blog extraction on next fresh run
+- Anchor seeding fires correctly for Puri — top_anchors = ['Jagannath Temple', 'Puri Beach', 'Konark Sun Temple', 'Chilika Lake', 'Raghurajpur', 'Gundicha Temple'] (correct)
+- First valid run (pre-TPD): Puri got YouTube=8, Reddit=5 (all safety warnings, not place recommendations), Blog=0
+
+**Puri re-run required.** Sprint 5 baseline: blog=3, non-maps share=100%. Sprint 7 target: blog≥2 after regex fix.
+
+---
+
+## 4. Verdict
+
+| Sprint 7 Criterion | Result | Status |
+|---|---|---|
+| Singapore anchor coverage ≥3/5 | **4/5 = 80%** | 🟢 **MET** |
+| Puri blog yield ≥2 after regex fix | Not testable (TPD limit) | 🟡 **Deferred** |
+| Anchor seeding architecture | Working end-to-end | 🟢 **Confirmed** |
+
+**Overall: Singapore target met. Anchor seeding is the load-bearing fix — it works regardless of extraction LLM bias.** The Sprint 5 §8 approach "anchor allow-list per destination" is now implemented and producing results.
+
+---
+
+## 5. Remaining gaps
+
+1. **S.E.A. Aquarium missing** — the `enrich_anchor_hints` LLM returns 6 names for Singapore; Aquarium isn't one of them. Could add a Singapore-specific override in `_LLM_ANCHOR_CACHE` or extend the anchor list to 8. Low priority — 4/5 is a passing score.
+2. **Puri blog zero-yield** — regex fix is in place; re-run needed on a fresh day to verify it works.
+3. **Groq free-tier TPD (100k)** — sequential benchmark runs within one day will exhaust it after ~3 full runs. Consider switching to Cerebras or adding a `.env` override for the benchmark LLM.
+
+---
+
+## 6. Run artefacts (Sprint 7)
+
+- `out/singapore.json`, `out/singapore.stderr.log` — Sprint 7 Singapore (valid run, pre-TPD exhaustion)
+- `out/puri.json`, `out/puri.stderr.log` — Sprint 7 Puri (skeleton only; TPD limit hit)

@@ -1,0 +1,14 @@
+{
+  "trip_id": "00000000-0000-0000-0000-000000000050",
+  "user_id": "00000000-0000-0000-0000-0000000000aa",
+  "destination": "Puri, Odisha",
+  "date_from": "2026-11-21",
+  "date_to": "2026-11-22",
+  "duration_days": 2,
+  "travelers": "2",
+  "vibes": ["temples", "beaches", "local cuisine", "spiritual"],
+  "accommodation": "Beachside Guesthouse",
+  "pace": "Balanced",
+  "budget": "$",
+  "preferences": "Want to visit Jagannath Temple, Puri beach, and Konark Sun Temple if time permits. Interested in local seafood and authentic Odia food."
+}

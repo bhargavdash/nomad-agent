@@ -101,7 +101,9 @@ def test_build_queries_returns_destination_agnostic_queries() -> None:
     # Always present axes.
     assert any("travel vlog" in q for q in queries)
     assert any("food" in q for q in queries)
-    assert any("hidden places" in q for q in queries)
+    # Sprint 5: anchor query replaces the prior "hidden places" slot so famous
+    # attractions surface alongside niche-creator content.
+    assert any("top things to do" in q for q in queries)
     # Each query must reference the destination.
     assert all("Goa, India" in q for q in queries)
     # Capped at 5.
@@ -119,8 +121,8 @@ def test_build_queries_falls_back_when_no_vibes() -> None:
     trip = _trip(vibes=[])
     signals = extract_signals(trip)
     queries = _build_queries(trip, signals)
-    # Should include the generic discovery prompt or hidden places.
-    assert any("things to do in" in q or "hidden places" in q for q in queries)
+    # Should include the generic discovery prompt or the anchor query.
+    assert any("things to do in" in q for q in queries)
 
 
 def test_build_queries_includes_season_only_when_informative() -> None:
@@ -190,27 +192,35 @@ def test_engagement_filter_keeps_hidden_likes() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_filter_quality_drops_listicle_titles() -> None:
+def test_filter_quality_deprioritizes_listicles_but_keeps_them() -> None:
+    """Sprint 5: listicle videos are kept (anchor-attraction content lives in
+    'Top 10' titles) but ranked below non-listicle within the same view tier."""
     shorts = [
         _short("a", "C1", view_count=10000, title="Top 10 Places in Goa"),
         _short("b", "C2", view_count=10000, title="Crab xacuti at Martin's Corner"),
     ]
     result = _filter_quality(shorts)
-    assert {s.video_id for s in result} == {"b"}
+    # Both survive — anchor coverage requires keeping listicle-format videos.
+    assert {s.video_id for s in result} == {"a", "b"}
+    # Non-listicle ranks first within the same view-count tier.
+    assert result[0].video_id == "b"
 
 
-def test_filter_quality_dedupes_by_channel_keeps_best() -> None:
+def test_filter_quality_caps_per_channel_keeps_top_two() -> None:
+    """Sprint 5: per-channel cap raised from 1 to 2 so a channel with multiple
+    relevant videos can contribute more than one anchor."""
     shorts = [
         _short("a", "TravelGuru", view_count=5000),
         _short("b", "TravelGuru", view_count=20000),  # winner
-        _short("c", "TravelGuru", view_count=1000),
+        _short("c", "TravelGuru", view_count=1000),  # third — dropped
         _short("d", "OtherChannel", view_count=8000),
     ]
     result = _filter_quality(shorts)
     channels = {s.channel_title for s in result}
     assert channels == {"TravelGuru", "OtherChannel"}
-    travel_guru = next(s for s in result if s.channel_title == "TravelGuru")
-    assert travel_guru.video_id == "b"
+    travel_guru_ids = {s.video_id for s in result if s.channel_title == "TravelGuru"}
+    # Top 2 of the 3 TravelGuru videos: b (20k) and a (5k); c (1k) dropped.
+    assert travel_guru_ids == {"a", "b"}
 
 
 # ---------------------------------------------------------------------------

@@ -46,12 +46,14 @@ if hasattr(sys.stderr, "buffer"):
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+import uuid  # noqa: E402
+
 from app.agents.google_blog import run_google_blog_agent  # noqa: E402
 from app.agents.reddit import run_reddit_agent  # noqa: E402
 from app.agents.synthesizer import run_synthesizer  # noqa: E402
 from app.agents.youtube_shorts import run_youtube_agent  # noqa: E402
 from app.schemas import ResearchDiscovery, TripParams  # noqa: E402
-from app.signals import extract_signals  # noqa: E402
+from app.signals import enrich_anchor_hints, enrich_signals_with_llm, extract_signals  # noqa: E402
 
 
 SAMPLES_DIR = ROOT / "samples"
@@ -138,8 +140,10 @@ async def run_pipeline_sequential(trip: TripParams) -> dict:
         file=sys.stderr,
     )
 
-    _banner("Stage 1 — Signals (pure Python, no LLM)")
+    _banner("Stage 1 — Signals (pure Python + LLM fallback when region unknown)")
     signals = extract_signals(trip)
+    signals = await enrich_signals_with_llm(signals, trip)
+    await enrich_anchor_hints(signals, trip.destination)
     print(
         f"Region          : {signals.region}\n"
         f"Season          : {signals.season}\n"
@@ -150,7 +154,8 @@ async def run_pipeline_sequential(trip: TripParams) -> dict:
         f"Weather hint    : {signals.weather_hint or '—'}\n"
         f"Query modifiers : {signals.query_modifiers}\n"
         f"Warnings        : {signals.warnings or '—'}\n"
-        f"Vibe→source wts : {signals.vibe_source_weights}",
+        f"Vibe→source wts : {signals.vibe_source_weights}\n"
+        f"Top anchors     : {signals.top_anchors or '—'}",
         file=sys.stderr,
     )
 
@@ -166,16 +171,44 @@ async def run_pipeline_sequential(trip: TripParams) -> dict:
     google_discoveries = await run_google_blog_agent(trip, signals)
     _print_discovery_summary("Google Blog", google_discoveries)
 
-    _banner("Stage 5 — Merge")
+    _banner("Stage 5 — Merge (with anchor seeding)")
+    existing_lower = {
+        d.title.lower()
+        for d in [*yt_discoveries, *reddit_discoveries, *google_discoveries]
+    }
+    anchor_seeds: list[ResearchDiscovery] = []
+    for name in (signals.top_anchors or []):
+        name_lower = name.lower()
+        already_covered = any(
+            name_lower in existing or existing in name_lower
+            for existing in existing_lower
+        )
+        if not already_covered:
+            anchor_seeds.append(
+                ResearchDiscovery(
+                    id=str(uuid.uuid4()),
+                    title=name,
+                    body=(
+                        f"{name} — a must-visit landmark in {trip.destination}. "
+                        "Pre-validated anchor stop. Check local advisories for opening hours."
+                    ),
+                    source="maps",
+                    tags=["anchor_hint"],
+                )
+            )
+
     all_discoveries: list[ResearchDiscovery] = [
+        *anchor_seeds,
         *yt_discoveries,
         *reddit_discoveries,
         *google_discoveries,
     ]
     print(
+        f"Anchor seeds     : {len(anchor_seeds)} "
+        f"(from top_anchors={signals.top_anchors})\n"
         f"Total discoveries: {len(all_discoveries)}  "
-        f"(yt={len(yt_discoveries)}  reddit={len(reddit_discoveries)}  "
-        f"blog={len(google_discoveries)})",
+        f"(anchors={len(anchor_seeds)}  yt={len(yt_discoveries)}  "
+        f"reddit={len(reddit_discoveries)}  blog={len(google_discoveries)})",
         file=sys.stderr,
     )
 

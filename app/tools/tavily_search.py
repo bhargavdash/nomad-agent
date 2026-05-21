@@ -45,6 +45,11 @@ _EXCLUDED_DOMAINS = [
 
 MAX_RESULTS_PER_QUERY = 5
 
+# Freshness window for blog content. 2 years drops most "best of 2018" lists
+# (where featured restaurants/hotels often no longer exist) while keeping
+# evergreen guide content like history and architecture references.
+TAVILY_RECENCY_DAYS = 730
+
 
 @dataclass
 class TavilyResult:
@@ -79,6 +84,7 @@ async def search_travel_blogs(
             max_results=min(max_results, 10),
             exclude_domains=_EXCLUDED_DOMAINS,
             include_answer=False,
+            days=TAVILY_RECENCY_DAYS,
         )
         raw_results = response.get("results", []) if isinstance(response, dict) else []
         out: list[TavilyResult] = []

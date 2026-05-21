@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     LLM_GOOGLE_MODEL: str = "llama-3.3-70b-versatile"
     LLM_SYNTH_PROVIDER: str = "anthropic"
     LLM_SYNTH_MODEL: str = "claude-sonnet-4-6"
+    # Tiny LLM call used only when the keyword-based region map misses; one
+    # cached call per destination, ~50 tokens out. Cheap model is fine.
+    LLM_SIGNALS_CLASSIFIER_PROVIDER: str = "groq"
+    LLM_SIGNALS_CLASSIFIER_MODEL: str = "llama-3.3-70b-versatile"
 
     # --- Provider API keys (optional — only checked when used) ---
     GROQ_API_KEY: str = ""
