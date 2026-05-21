@@ -29,10 +29,15 @@ async def _run_and_persist(trip_params: TripParams) -> None:
         if itinerary is None:
             raise RuntimeError("Pipeline produced no itinerary.")
 
+        # Phase 1: write final state only (mid-flight progress lands in Phase 2).
+        # research_jobs.phase is an Int in the Prisma schema (1..5) — DO NOT pass strings.
+        # See nomad-api/FRONTEND_INTEGRATION_PLAN.md §4.3.
         await supabase_writer.update_research_job(
             trip_params.trip_id,
             status="building",
-            phase="synthesizing",
+            phase=5,
+            progress=90,
+            message="BUILDING YOUR ITINERARY...",
         )
         await supabase_writer.write_itinerary(trip_params.trip_id, itinerary)
         await supabase_writer.mark_trip_ready(
@@ -47,8 +52,9 @@ async def _run_and_persist(trip_params: TripParams) -> None:
         await supabase_writer.update_research_job(
             trip_params.trip_id,
             status="completed",
-            phase="done",
+            phase=5,
             progress=100,
+            message="YOUR ITINERARY IS READY!",
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("Pipeline failed for trip %s", trip_params.trip_id)
