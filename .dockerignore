@@ -1,0 +1,38 @@
+# Virtual environment — recreated inside the image
+.venv/
+
+# Version control
+.git/
+.gitignore
+
+# Dev tooling / IDE
+.claude/
+.vscode/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Test and dev-only files
+tests/
+scripts/
+out/
+samples/
+
+# Docs
+*.md
+BENCHMARK.md
+HANDOFF.md
+README.md
+
+# Secrets — must be injected at runtime, not baked in
+.env
+.env.*
+
+# Python byte-code
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# uv backup lockfile
+uv.lock.bak
