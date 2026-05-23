@@ -481,9 +481,18 @@ async def _extract_via_llm(
             SystemMessage(content=system),
             HumanMessage(content=user),
         ]
+        logger.info(
+            "[LLM] synthesizer → invoking  candidates=%d  days=%d",
+            len(candidates),
+            len(target_counts),
+        )
         result = await structured.ainvoke(messages)
         if not isinstance(result, _LLMItineraryDraft):
             result = _LLMItineraryDraft.model_validate(result)
+        logger.info(
+            "[LLM] synthesizer → returned  days=%d",
+            len(result.days) if result.days else 0,
+        )
         return result
     except Exception as e:  # noqa: BLE001
         logger.warning("synthesizer.llm_call_failed: %s", e)

@@ -6,9 +6,13 @@ are read from config (env vars) so swapping models is a one-line change.
 
 from __future__ import annotations
 
+import logging
+
 from langchain_core.language_models import BaseChatModel
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_role(role: str) -> tuple[str, str]:
@@ -42,6 +46,7 @@ def get_llm(role: str) -> BaseChatModel:
     """
     provider, model = _resolve_role(role)
     provider = provider.lower()
+    logger.info("[LLM] role=%-28s  provider=%-10s  model=%s", role, provider, model)
 
     if provider == "groq":
         from langchain_groq import ChatGroq

@@ -2,8 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  [%(name)s]  %(message)s",
+    datefmt="%H:%M:%S",
+)
 
 from app.routes.research import router as research_router
 
