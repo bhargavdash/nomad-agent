@@ -695,6 +695,7 @@ async def _classify_destination_via_llm(
             structured = llm.with_structured_output(_Classification, method="json_mode")
         except Exception:  # noqa: BLE001
             structured = llm.with_structured_output(_Classification)
+        logger.info("[LLM] signals_classifier: classifying region/hemisphere for dest=%r", destination)
         result = await structured.ainvoke(
             [SystemMessage(content=system), HumanMessage(content=user)]
         )
@@ -751,6 +752,7 @@ async def enrich_anchor_hints(signals: TravelSignals, destination: str) -> None:
             structured = llm.with_structured_output(_AnchorList, method="json_mode")
         except Exception:  # noqa: BLE001
             structured = llm.with_structured_output(_AnchorList)
+        logger.info("[LLM] anchor_hints: fetching 5-6 landmarks for dest=%r", destination)
         result = await structured.ainvoke(
             [SystemMessage(content=system), HumanMessage(content=user)]
         )

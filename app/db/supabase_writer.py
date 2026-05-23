@@ -13,7 +13,7 @@ from typing import Any
 from supabase import Client, create_client
 
 from app.config import settings
-from app.schemas import AIItinerary
+from app.schemas import AIItinerary, ResearchDiscovery
 
 _client: Client | None = None
 
@@ -51,7 +51,8 @@ async def write_itinerary(trip_id: str, itinerary: AIItinerary) -> None:
     def _write() -> None:
         client = _get_client()
 
-        # Insert days.
+        # Insert days. stop_count must be populated here — the FE day card
+        # ("{N} stops planned") reads it directly, see ItineraryReveal.tsx.
         day_rows = [
             {
                 "trip_id": trip_id,
@@ -60,6 +61,7 @@ async def write_itinerary(trip_id: str, itinerary: AIItinerary) -> None:
                 "title": d.title,
                 "description": d.description,
                 "highlights": d.highlights,
+                "stop_count": len(d.stops),
             }
             for d in itinerary.days
         ]
@@ -123,3 +125,26 @@ async def mark_trip_failed(trip_id: str, error_message: str) -> None:
         ).eq("trip_id", trip_id).execute()
 
     await asyncio.to_thread(_mark)
+
+
+async def write_discoveries(trip_id: str, discoveries: list[ResearchDiscovery]) -> None:
+    """Write the discoveries JSON array into research_jobs.discoveries (JSONB).
+
+    The FE polling loop (useResearchTicker.ts) animates the "LIVE DISCOVERY"
+    card whenever this array grows. Called at least twice per pipeline run —
+    once mid-flight from merge_node with a partial list, once at the end
+    from _run_and_persist with the full list — so the FE swaps cards at
+    least twice. See FRONTEND_INTEGRATION_PLAN.md §8 Phase 2.
+
+    Replaces (does not append to) the column. Caller controls cumulative
+    behaviour by passing a larger list each call.
+    """
+    payload = [d.model_dump() for d in discoveries]
+
+    def _write() -> None:
+        client = _get_client()
+        client.table("research_jobs").update({"discoveries": payload}).eq(
+            "trip_id", trip_id
+        ).execute()
+
+    await asyncio.to_thread(_write)
