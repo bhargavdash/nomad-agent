@@ -73,7 +73,7 @@ _BUILT_IN_FIXTURES: dict[str, dict] = {
         "vibes": ["luxury", "culture", "iconic"],
         "accommodation": "Boutique Hotel",
         "pace": "Balanced",
-        "budget": "$$$$",
+        "budget": "Very-High",
         "preferences": None,
     },
     "tokyo": {
@@ -87,7 +87,7 @@ _BUILT_IN_FIXTURES: dict[str, dict] = {
         "vibes": ["foodie", "culture", "street food"],
         "accommodation": "Boutique Hotel",
         "pace": "Action-Packed",
-        "budget": "$$$",
+        "budget": "High",
         "preferences": None,
     },
 }

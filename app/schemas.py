@@ -28,7 +28,7 @@ class TripParams(BaseModel):
     vibes: list[str] = Field(default_factory=list)
     accommodation: str = "Hotel"
     pace: Literal["Slow & Soulful", "Balanced", "Action-Packed"] = "Balanced"
-    budget: Literal["$", "$$", "$$$", "$$$$"] = "$$"
+    budget: Literal["Low", "Medium", "High", "Very-High"] = "Medium"
     preferences: str | None = None
 
 

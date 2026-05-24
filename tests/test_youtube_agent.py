@@ -39,7 +39,7 @@ def _trip(**overrides) -> TripParams:
         vibes=["nightlife", "beaches"],
         accommodation="Hotel",
         pace="Balanced",
-        budget="$$",
+        budget="Medium",
         preferences=None,
     )
     base.update(overrides)

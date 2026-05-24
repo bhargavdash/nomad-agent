@@ -518,10 +518,10 @@ def _build_query_modifiers(
 # ---------------------------------------------------------------------------
 
 _BUDGET_TIER = {
-    "$": "shoestring",
-    "$$": "mid",
-    "$$$": "premium",
-    "$$$$": "luxury",
+    "Low": "shoestring",
+    "Medium": "mid",
+    "High": "premium",
+    "Very-High": "luxury",
 }
 
 _PACE_DENSITY = {

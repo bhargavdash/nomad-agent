@@ -26,7 +26,7 @@ def _trip(**overrides) -> TripParams:
         vibes=["beaches"],
         accommodation="Hotel",
         pace="Balanced",
-        budget="$$",
+        budget="Medium",
         preferences=None,
     )
     base.update(overrides)
@@ -78,7 +78,7 @@ def test_goa_december_party_peak_with_christmas_nye() -> None:
             date_from="2026-12-25",
             date_to="2027-01-01",
             vibes=["nightlife", "beaches"],
-            budget="$$",
+            budget="Medium",
         )
     )
     assert signals.region == "india"
@@ -100,7 +100,7 @@ def test_manali_july_monsoon_adventure_low_crowd() -> None:
             date_from="2026-07-10",
             date_to="2026-07-17",
             vibes=["adventure", "nature"],
-            budget="$",
+            budget="Low",
         )
     )
     assert signals.region == "india"
@@ -121,7 +121,7 @@ def test_paris_august_peak_summer_luxury_culture() -> None:
             date_from="2026-08-05",
             date_to="2026-08-12",
             vibes=["luxury", "culture"],
-            budget="$$$",
+            budget="High",
         )
     )
     assert signals.region == "europe"
@@ -141,7 +141,7 @@ def test_bali_june_off_season_relaxation() -> None:
             date_from="2026-06-01",
             date_to="2026-06-08",
             vibes=["relaxation", "beaches"],
-            budget="$$",
+            budget="Medium",
         )
     )
     assert signals.region == "southeast_asia"
@@ -160,7 +160,7 @@ def test_nyc_may_shoulder_foodie_culture() -> None:
             date_to="2026-05-15",
             duration_days=5,
             vibes=["foodie", "culture"],
-            budget="$$",
+            budget="Medium",
         )
     )
     assert signals.region == "north_america"
@@ -188,7 +188,7 @@ def test_signals_differ_by_destination_same_dates_same_vibes() -> None:
         date_to="2026-07-17",
         duration_days=7,
         vibes=["adventure"],
-        budget="$$",
+        budget="Medium",
     )
     goa = extract_signals(_trip(destination="Goa, India", **base))
     paris = extract_signals(_trip(destination="Paris, France", **base))

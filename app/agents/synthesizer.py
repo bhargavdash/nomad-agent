@@ -332,13 +332,12 @@ name the trail/grade/distance; beaches → name the beach.
 
 17. BUDGET MUST MATCH. Restaurants, bars, and stays must match the trip's \
 `Budget tier` from the Signal summary: \
-shoestring/$ = street stalls, dhabas, hostels, dorms; \
-mid/$$ = mid-range cafés, family restaurants, heritage homestays, boutique \
+Low = street stalls, dhabas, hostels, dorms; \
+Medium = mid-range cafés, family restaurants, heritage homestays, boutique \
 guesthouses; \
-premium/$$$ = designer-hotel restaurants, well-known chef-led spots, boutique \
-hotels; \
-luxury/$$$$ = Michelin/heritage-palace dining, palace suites. \
-NEVER suggest a $$$$ spot for a $$ trip. If unsure, lean cheaper.
+High = designer-hotel restaurants, well-known chef-led spots, boutique hotels; \
+Very-High = Michelin/heritage-palace dining, palace suites. \
+NEVER suggest a Very-High spot for a Low or Medium trip. If unsure, lean cheaper.
 
 EXAMPLES (illustrate the standard — don't copy them):
 - BAD day description: "Today you'll explore Jaipur's heritage and architecture."
@@ -449,10 +448,10 @@ def _build_prompt(
 # Voice cues block. Kept compact — the synth system prompt rule 15 has the
 # full rubric for what each tier means in terms of venues.
 _BUDGET_HINT: dict[str, str] = {
-    "$": "shoestring — street food, dhabas, hostels",
-    "$$": "mid-range — cafés, family restaurants, boutique guesthouses",
-    "$$$": "premium — chef-led spots, boutique hotels",
-    "$$$$": "luxury — heritage-palace / Michelin-tier dining and stays",
+    "Low": "shoestring — street food, dhabas, hostels",
+    "Medium": "mid-range — cafés, family restaurants, boutique guesthouses",
+    "High": "premium — chef-led spots, boutique hotels",
+    "Very-High": "luxury — heritage-palace / Michelin-tier dining and stays",
 }
 
 
@@ -538,7 +537,7 @@ def _coerce_tags_for_stop(tags: list[str]) -> list[str]:
 
 def _coerce_time(time_str: str) -> str:
     """Best-effort coercion to AIStop.time pattern '\\d{1,2}:\\d{2}'."""
-    s = time_str.strip()
+    s = time_str.strip
     m = re.match(r"^(\d{1,2}):(\d{2})$", s)
     if m:
         return f"{int(m.group(1))}:{m.group(2)}"

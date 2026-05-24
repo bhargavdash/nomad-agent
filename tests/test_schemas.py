@@ -25,7 +25,7 @@ def _valid_trip_payload() -> dict:
         "vibes": ["beaches"],
         "accommodation": "Boutique Villa",
         "pace": "Balanced",
-        "budget": "$$",
+        "budget": "Medium",
         "preferences": None,
     }
 
@@ -40,7 +40,7 @@ def test_trip_params_uses_defaults_for_optional_fields() -> None:
     trip = TripParams(trip_id="t1", user_id="u1", destination="Goa")
     assert trip.duration_days == 7
     assert trip.travelers == "2"
-    assert trip.budget == "$$"
+    assert trip.budget == "Medium"
     assert trip.pace == "Balanced"
     assert trip.vibes == []
 
@@ -54,7 +54,7 @@ def test_trip_params_rejects_invalid_pace() -> None:
 
 def test_trip_params_rejects_invalid_budget() -> None:
     payload = _valid_trip_payload()
-    payload["budget"] = "$$$$$"
+    payload["budget"] = "Extreme"
     with pytest.raises(ValidationError):
         TripParams.model_validate(payload)
 
