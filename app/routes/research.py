@@ -148,13 +148,25 @@ async def _run_and_persist(trip_params: TripParams) -> None:
         await supabase_writer.write_itinerary(trip_params.trip_id, itinerary)
         await supabase_writer.mark_trip_ready(
             trip_params.trip_id,
-            emoji=itinerary.emoji,
             stats={
                 "stats_places": itinerary.stats_places,
                 "stats_tips": itinerary.stats_tips,
                 "stats_photo_stops": itinerary.stats_photo_stops,
             },
         )
+
+        # Trip-level planning surface (Tier 2). Isolated + best-effort: if the
+        # new columns aren't migrated yet, this logs and continues — the trip is
+        # already marked ready above, so a missing column never blocks completion.
+        try:
+            await supabase_writer.update_trip_overview(trip_params.trip_id, itinerary)
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "update_trip_overview failed for trip %s (columns migrated?) — "
+                "continuing; trip is already ready.",
+                trip_params.trip_id,
+                exc_info=True,
+            )
 
         # Final completion. Stats on research_jobs feed the FE polling
         # response (`routes/research.ts`) which is camelCased to

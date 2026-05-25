@@ -226,11 +226,31 @@ class _LLMDay(BaseModel):
 
 
 class _LLMItineraryDraft(BaseModel):
-    emoji: str = Field(default="🧭")
-    # Circuit / day-arc plan the model commits to before writing days. Internal
-    # for now (forces route reasoning); promoted to the wire schema in Tier 2.
+    # Trip-level planning surface (Tier 2). route_summary forces circuit
+    # reasoning; the rest carry the GPT-5.5-style overview/transport/stay/budget.
     route_summary: str = Field(default="")
+    transport_strategy: str = Field(default="")
+    stay_by_city: dict[str, str] = Field(default_factory=dict)
+    budget_estimate: str = Field(default="")
     days: list[_LLMDay] = Field(default_factory=list)
+
+    @field_validator("stay_by_city", mode="before")
+    @classmethod
+    def _coerce_stay(cls, v: Any) -> dict[str, str]:
+        # Smaller models sometimes emit a list of {"city","stay"} objects or a
+        # string instead of a {city: stay} map. Coerce defensively.
+        if isinstance(v, dict):
+            return {str(k): str(val) for k, val in v.items() if val}
+        if isinstance(v, list):
+            out: dict[str, str] = {}
+            for item in v:
+                if isinstance(item, dict):
+                    city = item.get("city") or item.get("name")
+                    stay = item.get("stay") or item.get("area") or item.get("suggestion")
+                    if city and stay:
+                        out[str(city)] = str(stay)
+            return out
+        return {}
 
 
 # ---------------------------------------------------------------------------
@@ -547,6 +567,7 @@ def _llm_draft_to_itinerary(
     candidates: list[_PlaceCandidate],
     discoveries_by_id: dict[str, ResearchDiscovery],
     duration_days: int,
+    signals: TravelSignals | None = None,
 ) -> AIItinerary:
     """Map (loose) LLM draft → (strict) AIItinerary. Raises ValidationError on fail."""
     candidates_by_norm = {_normalize_title(c.title): c for c in candidates}
@@ -642,15 +663,17 @@ def _llm_draft_to_itinerary(
 
     stats_places, stats_tips, stats_photo = _compute_stats(ai_days, discoveries_out)
 
-    emoji = draft.emoji.strip() or "🧭"
-    if len(emoji) > 4:
-        emoji = emoji[:4]
-
     return AIItinerary(
-        emoji=emoji,
         stats_places=stats_places,
         stats_tips=stats_tips,
         stats_photo_stops=stats_photo,
+        # Trip-level surface: from the LLM draft, except seasonal_tips which are
+        # deterministic (from signals) so they're always season-correct.
+        route_summary=(draft.route_summary.strip() or None),
+        transport_strategy=(draft.transport_strategy.strip() or None),
+        seasonal_tips=list(signals.seasonal_tips) if signals else [],
+        stay_by_city=dict(draft.stay_by_city),
+        budget_estimate=(draft.budget_estimate.strip() or None),
         discoveries=discoveries_out,
         days=ai_days,
     )
@@ -727,6 +750,7 @@ def _skeleton_itinerary(
     trip_params: TripParams,
     candidates: list[_PlaceCandidate],
     discoveries: list[ResearchDiscovery],
+    signals: TravelSignals | None = None,
 ) -> AIItinerary:
     """Deterministic fallback used when LLM fails or input is too thin.
 
@@ -800,11 +824,23 @@ def _skeleton_itinerary(
     discoveries_out = _pad_discoveries(discoveries)
     stats_places, stats_tips, stats_photo = _compute_stats(days, discoveries_out)
 
+    # Deterministic trip-level surface for the skeleton path (no LLM): a plain
+    # city-order route, season-correct tips; transport/stay/budget left empty.
+    skeleton_cities: list[str] = []
+    for d in days:
+        if d.city and d.city not in skeleton_cities:
+            skeleton_cities.append(d.city)
+    route_summary = " → ".join(skeleton_cities) if skeleton_cities else None
+
     return AIItinerary(
-        emoji="🧭",
         stats_places=stats_places,
         stats_tips=stats_tips,
         stats_photo_stops=stats_photo,
+        route_summary=route_summary,
+        transport_strategy=None,
+        seasonal_tips=list(signals.seasonal_tips) if signals else [],
+        stay_by_city={},
+        budget_estimate=None,
         discoveries=discoveries_out,
         days=days,
     )
@@ -958,7 +994,7 @@ async def run_synthesizer(
             len(candidates),
             MIN_DISCOVERIES,
         )
-        return _skeleton_itinerary(trip_params, candidates, discoveries)
+        return _skeleton_itinerary(trip_params, candidates, discoveries, signals)
 
     for attempt in range(1, MAX_LLM_ATTEMPTS + 1):
         draft = await _extract_via_llm(
@@ -977,6 +1013,7 @@ async def run_synthesizer(
                 candidates,
                 discoveries_by_id,
                 trip_params.duration_days,
+                signals,
             )
             logger.info(
                 "synthesizer.done attempt=%d days=%d stops=%d discoveries=%d",
@@ -998,4 +1035,4 @@ async def run_synthesizer(
         "synthesizer: all %d LLM attempts failed — falling back to skeleton",
         MAX_LLM_ATTEMPTS,
     )
-    return _skeleton_itinerary(trip_params, candidates, discoveries)
+    return _skeleton_itinerary(trip_params, candidates, discoveries, signals)

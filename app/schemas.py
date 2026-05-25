@@ -61,9 +61,16 @@ class AIDay(BaseModel):
 
 
 class AIItinerary(BaseModel):
-    emoji: str = Field(..., min_length=1, max_length=4)
     stats_places: int
     stats_tips: int
     stats_photo_stops: int
+    # Trip-level planning surface (Tier 2). All optional so the skeleton fallback
+    # and back-compat stay valid. Mirror these in nomad-api's Prisma `Trip` model
+    # (snake_case columns) and nomad-web's `TripSummary` type.
+    route_summary: str | None = None  # city circuit + day allocation, or single-city arc
+    transport_strategy: str | None = None  # how to move between/within cities
+    seasonal_tips: list[str] = Field(default_factory=list)  # from signals (deterministic)
+    stay_by_city: dict[str, str] = Field(default_factory=dict)  # {city: "area + tier"}
+    budget_estimate: str | None = None  # rough cost blurb
     discoveries: list[ResearchDiscovery] = Field(..., min_length=3, max_length=12)
     days: list[AIDay] = Field(..., min_length=1)

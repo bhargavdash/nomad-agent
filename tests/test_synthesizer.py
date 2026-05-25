@@ -324,7 +324,7 @@ def test_llm_draft_maps_stops_to_candidates_by_title() -> None:
         for c in cands
     }
     draft = _LLMItineraryDraft(
-        emoji="🌴",
+        route_summary="Goa beaches → Panjim",
         days=[
             _llm_day(
                 day_number=1,
@@ -349,7 +349,7 @@ def test_llm_draft_maps_stops_to_candidates_by_title() -> None:
         ],
     )
     itin = _llm_draft_to_itinerary(draft, cands, discoveries_by_id, duration_days=1)
-    assert itin.emoji == "🌴"
+    assert itin.route_summary == "Goa beaches → Panjim"
     assert len(itin.days) == 1
     assert [s.source for s in itin.days[0].stops] == ["youtube", "reddit", "blog"]
     # Every stop should have non-empty tags, valid time, and a name.
@@ -584,7 +584,7 @@ async def test_run_synthesizer_happy_path_with_mocked_llm() -> None:
         _disc(title="Baga Beach", source="youtube"),
     ]
     fake_draft = _LLMItineraryDraft(
-        emoji="🌴",
+        route_summary="North Goa → South Goa",
         days=[
             _llm_day(
                 day_number=1,
@@ -1014,3 +1014,67 @@ def test_synth_prompt_has_route_and_content_rules() -> None:
     assert "route_summary" in lowered
     assert "plan first" in lowered
     assert "highlights" in lowered
+
+
+# ---------------------------------------------------------------------------
+# Tier 2 — trip-level fields (route/transport/stay/budget/seasonal)
+# ---------------------------------------------------------------------------
+
+
+def test_llm_draft_maps_trip_level_fields() -> None:
+    cands = _cands_for([("Anjuna", "youtube"), ("Baga", "reddit")])
+    by_id = {
+        c.discovery_ids[0]: ResearchDiscovery(
+            id=c.discovery_ids[0],
+            title=c.title,
+            body=c.body,
+            tags=c.tags,
+            source=c.sources[0],
+        )
+        for c in cands
+    }
+    trip = _trip()
+    signals = extract_signals(trip)
+    draft = _LLMItineraryDraft(
+        route_summary="North Goa (2) → South Goa (1)",
+        transport_strategy="Scooter in the north, taxi to the south.",
+        stay_by_city={"North Goa": "Assagao boutique guesthouse"},
+        budget_estimate="Rough INR 40-60k for 2",
+        days=[
+            _llm_day(
+                day_number=1,
+                stops=[
+                    _llm_stop(name="Anjuna", discovery_title="Anjuna", source="youtube"),
+                ],
+            )
+        ],
+    )
+    itin = _llm_draft_to_itinerary(
+        draft, cands, by_id, duration_days=1, signals=signals
+    )
+    assert itin.route_summary == "North Goa (2) → South Goa (1)"
+    assert itin.transport_strategy.startswith("Scooter")
+    assert itin.stay_by_city == {"North Goa": "Assagao boutique guesthouse"}
+    assert itin.budget_estimate == "Rough INR 40-60k for 2"
+    # seasonal_tips are deterministic (from signals), not the LLM draft.
+    assert itin.seasonal_tips == list(signals.seasonal_tips)
+    # emoji is gone entirely.
+    assert not hasattr(itin, "emoji")
+
+
+def test_llm_draft_coerces_stay_by_city_list_form() -> None:
+    # Small models sometimes emit stay_by_city as a list of objects.
+    draft = _LLMItineraryDraft.model_validate(
+        {
+            "route_summary": "x",
+            "stay_by_city": [
+                {"city": "Jaipur", "stay": "Bani Park heritage haveli"},
+                {"name": "Jodhpur", "area": "old blue city near clock tower"},
+            ],
+            "days": [],
+        }
+    )
+    assert draft.stay_by_city == {
+        "Jaipur": "Bani Park heritage haveli",
+        "Jodhpur": "old blue city near clock tower",
+    }

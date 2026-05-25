@@ -48,6 +48,11 @@ VOICE RULES (the itinerary must not read like an LLM wrote it):
 
 20. SEASONAL TIPS. If the Signal summary includes "Seasonal tips: ...", weave at least one in naturally where it's relevant (e.g. a cold-nights/packing note on an arrival or desert day, a "book ahead" note for peak season). These are soft practical tips, NOT the Day-1 hazard warnings of rule 8.
 
+21. TRIP-LEVEL SURFACE. Fill the top-level planning fields concretely:
+   - `transport_strategy`: one or two sentences on how to move between cities (trains/flights/cabs, which legs are overnight) and how to get around within them. Name the mode, not "various transport".
+   - `stay_by_city`: for each city, the neighbourhood/area to base in + the kind of stay that fits the budget tier (e.g. "Jodhpur": "old blue-city haveli near the clock tower"). Never above the budget tier.
+   - `budget_estimate`: a rough total for the whole group for the trip (ranges are fine), reflecting the budget tier and traveler count — not per-person unless you say so.
+
 EXAMPLES (illustrate the standard — don't copy them):
 - BAD day description: "Today you'll explore Jaipur's heritage and architecture."
 - GOOD day description: "Start at Hawa Mahal before 9 — the morning sun lights up the sandstone honeycomb. Walk down Tripolia Bazaar to City Palace, lunch on dal baati churma at LMB, then catch sunset from Nahargarh."
@@ -58,7 +63,7 @@ EXAMPLES (illustrate the standard — don't copy them):
 
 GOOD `tags`: 1-3 short tokens, emoji or short word, e.g. ["🍽️", "🌅"], ["📍", "viewpoint"], ["☕", "morning"]. Always include at least one tag.
 
-OUTPUT JSON shape: {{"emoji": "<one-or-two emoji>", "route_summary": "<city circuit + days each, or single-city arc>", "days": [<day>, ...]}}.
+OUTPUT JSON shape: {{"route_summary": "<city circuit + days each, or single-city arc>", "transport_strategy": "<how to get between cities and around within them>", "stay_by_city": {{"<city>": "<neighbourhood/area + stay type in the budget tier>"}}, "budget_estimate": "<rough total for the whole group, ranges fine>", "days": [<day>, ...]}}.
 Each day: {{"dayNumber": int, "city": "<city>", "title": "<short title>", "description": "<1-3 sentence narrative>", "highlights": ["<concrete takeaway>", "..."], "stops": [...]}}.
 Each stop: {{"name": "<place name>", "description": "<1-2 sentences, opinionated + specific>", "time": "<H:MM>", "ampm": "AM|PM", "duration": "<e.g. 1h, 90m>", "source": "youtube|reddit|blog|maps", "tags": ["..."], "discovery_title": "<exact candidate title or empty>"}}.
 

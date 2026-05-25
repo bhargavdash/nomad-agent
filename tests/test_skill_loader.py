@@ -118,7 +118,7 @@ def test_synthesizer_skill_formats_with_stop_bounds() -> None:
     # for its JSON-shape example. .format() must succeed and produce real braces.
     rendered = load_skill("synthesizer").format(min_stops=3, max_stops=6)
     assert "between 3 and 6 stops" in rendered
-    assert '{"emoji"' in rendered  # escaped {{ }} collapsed to single braces
+    assert '{"route_summary"' in rendered  # escaped {{ }} collapsed to single braces
     assert "{min_stops}" not in rendered
 
 

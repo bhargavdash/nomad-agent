@@ -218,7 +218,11 @@ async def run_pipeline_sequential(trip: TripParams) -> dict:
         f"Days       : {len(itinerary.days)}\n"
         f"Total stops: {sum(len(d.stops) for d in itinerary.days)}\n"
         f"Discoveries: {len(itinerary.discoveries)}\n"
-        f"Emoji      : {itinerary.emoji}\n"
+        f"Route      : {itinerary.route_summary or '—'}\n"
+        f"Transport  : {itinerary.transport_strategy or '—'}\n"
+        f"Stays      : {itinerary.stay_by_city or '—'}\n"
+        f"Budget     : {itinerary.budget_estimate or '—'}\n"
+        f"Seasonal   : {itinerary.seasonal_tips or '—'}\n"
         f"Stats      : places={itinerary.stats_places} "
         f"tips={itinerary.stats_tips} photo_stops={itinerary.stats_photo_stops}",
         file=sys.stderr,
