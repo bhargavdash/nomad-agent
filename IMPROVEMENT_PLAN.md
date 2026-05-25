@@ -69,7 +69,9 @@ Each workstream states the problem it solves, why it matters, what changes, and 
 - **Success:** a trip whose `preferences` says "we love markets and street food, hate touristy buffets" visibly shifts the itinerary; weights measurably change source mix.
 - **Effort:** S. **Risk:** low.
 
-### WS2 — Externalize prompts as agent "skill" files *(solves P7; enables P1/P2/P3 prompt work)*
+### WS2 — Externalize prompts as agent "skill" files *(solves P7; enables P1/P2/P3 prompt work)* — ✅ CORE SHIPPED (Milestone B)
+**Shipped:** `app/skills/loader.py` (frontmatter + `@include` + caching + `render_skill`); all 6 agent prompts moved **byte-identically** to `app/skills/*.md` (verified by a one-time round-trip migration) and loaded via `load_skill(...)`; 11 loader unit tests incl. `@include` resolution. The prompt-contract tests now guard the markdown-backed constants.
+**Next (content iteration, now unblocked):** extract shared blocks into `app/skills/_shared/*.md` (one banned-words list instead of per-agent copies) and add `app/skills/regions/*.md` overlays — done as a deliberate pass with a benchmark check, since it changes prompt *content* (the verbatim move deliberately did not).
 - **Problem:** prompts are buried in code as megastrings; iterating means editing Python, and the banned-words list is copy-pasted across four agents.
 - **Why:** this is the technique from your work — markdown "skills" that an agent loads as context. It decouples prompt engineering from code, makes prompts diffable/versionable/A/B-testable, and lets shared blocks (voice rules, banned words, output schema) live in one place.
 - **What changes:**
