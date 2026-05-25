@@ -52,6 +52,7 @@ from app.agents.google_blog import run_google_blog_agent  # noqa: E402
 from app.agents.reddit import run_reddit_agent  # noqa: E402
 from app.agents.synthesizer import run_synthesizer  # noqa: E402
 from app.agents.youtube_shorts import run_youtube_agent  # noqa: E402
+from app import cache  # noqa: E402
 from app.geo import build_geo_brief  # noqa: E402
 from app.schemas import ResearchDiscovery, TripParams  # noqa: E402
 from app.signals import enrich_anchor_hints, enrich_signals_with_llm, extract_signals  # noqa: E402
@@ -160,58 +161,70 @@ async def run_pipeline_sequential(trip: TripParams) -> dict:
         file=sys.stderr,
     )
 
-    _banner("Stage 2 — YouTubeShorts agent (sequential)")
-    yt_discoveries = await run_youtube_agent(trip, signals)
-    _print_discovery_summary("YouTube", yt_discoveries)
-
-    _banner("Stage 3 — Reddit agent (sequential)")
-    reddit_discoveries = await run_reddit_agent(trip, signals)
-    _print_discovery_summary("Reddit", reddit_discoveries)
-
-    _banner("Stage 4 — Google Blog agent (sequential)")
-    google_discoveries = await run_google_blog_agent(trip, signals)
-    _print_discovery_summary("Google Blog", google_discoveries)
-
-    _banner("Stage 5 — Merge (with anchor seeding)")
-    existing_lower = {
-        d.title.lower()
-        for d in [*yt_discoveries, *reddit_discoveries, *google_discoveries]
-    }
-    anchor_seeds: list[ResearchDiscovery] = []
-    for name in (signals.top_anchors or []):
-        name_lower = name.lower()
-        already_covered = any(
-            name_lower in existing or existing in name_lower
-            for existing in existing_lower
+    _banner("Stage 1.5 — Research cache check (L1)")
+    all_discoveries = await cache.get_cached_research(trip.destination)
+    if all_discoveries is not None:
+        print(
+            f"CACHE HIT — {len(all_discoveries)} discoveries reused "
+            "(skipping all research agents)",
+            file=sys.stderr,
         )
-        if not already_covered:
-            anchor_seeds.append(
-                ResearchDiscovery(
-                    id=str(uuid.uuid4()),
-                    title=name,
-                    body=(
-                        f"{name} — a must-visit landmark in {trip.destination}. "
-                        "Pre-validated anchor stop. Check local advisories for opening hours."
-                    ),
-                    source="maps",
-                    tags=["anchor_hint"],
-                )
-            )
+    else:
+        print("Cache miss — running research agents.", file=sys.stderr)
 
-    all_discoveries: list[ResearchDiscovery] = [
-        *anchor_seeds,
-        *yt_discoveries,
-        *reddit_discoveries,
-        *google_discoveries,
-    ]
-    print(
-        f"Anchor seeds     : {len(anchor_seeds)} "
-        f"(from top_anchors={signals.top_anchors})\n"
-        f"Total discoveries: {len(all_discoveries)}  "
-        f"(anchors={len(anchor_seeds)}  yt={len(yt_discoveries)}  "
-        f"reddit={len(reddit_discoveries)}  blog={len(google_discoveries)})",
-        file=sys.stderr,
-    )
+        _banner("Stage 2 — YouTubeShorts agent (sequential)")
+        yt_discoveries = await run_youtube_agent(trip, signals)
+        _print_discovery_summary("YouTube", yt_discoveries)
+
+        _banner("Stage 3 — Reddit agent (sequential)")
+        reddit_discoveries = await run_reddit_agent(trip, signals)
+        _print_discovery_summary("Reddit", reddit_discoveries)
+
+        _banner("Stage 4 — Google Blog agent (sequential)")
+        google_discoveries = await run_google_blog_agent(trip, signals)
+        _print_discovery_summary("Google Blog", google_discoveries)
+
+        _banner("Stage 5 — Merge (with anchor seeding)")
+        existing_lower = {
+            d.title.lower()
+            for d in [*yt_discoveries, *reddit_discoveries, *google_discoveries]
+        }
+        anchor_seeds: list[ResearchDiscovery] = []
+        for name in (signals.top_anchors or []):
+            name_lower = name.lower()
+            already_covered = any(
+                name_lower in existing or existing in name_lower
+                for existing in existing_lower
+            )
+            if not already_covered:
+                anchor_seeds.append(
+                    ResearchDiscovery(
+                        id=str(uuid.uuid4()),
+                        title=name,
+                        body=(
+                            f"{name} — a must-visit landmark in {trip.destination}. "
+                            "Pre-validated anchor stop. Check local advisories for opening hours."
+                        ),
+                        source="maps",
+                        tags=["anchor_hint"],
+                    )
+                )
+
+        all_discoveries = [
+            *anchor_seeds,
+            *yt_discoveries,
+            *reddit_discoveries,
+            *google_discoveries,
+        ]
+        await cache.set_cached_research(trip.destination, all_discoveries)
+        print(
+            f"Anchor seeds     : {len(anchor_seeds)} "
+            f"(from top_anchors={signals.top_anchors})\n"
+            f"Total discoveries: {len(all_discoveries)}  "
+            f"(anchors={len(anchor_seeds)}  yt={len(yt_discoveries)}  "
+            f"reddit={len(reddit_discoveries)}  blog={len(google_discoveries)})",
+            file=sys.stderr,
+        )
 
     _banner("Stage 5.5 — Geo brief (city circuit + distances + sun times)")
     geo_brief = await build_geo_brief(trip, signals)

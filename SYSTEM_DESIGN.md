@@ -205,8 +205,58 @@ TTL   ~permanent (geography doesn't move)
 ### 5.4 Invalidation & safety
 - **Versioned key prefixes** (`v1`) so a schema or agent-logic change can invalidate cleanly by bump.
 - **TTL** bounds staleness without manual work.
-- **Vibe-neutral L1:** research queries for the cache must *not* bake in the first requester's vibes, or the pool is biased. Personalization is strictly an L2/synthesis concern.
+- **Vibe-neutral L1:** research queries for the cache should not heavily bake in the first requester's vibes, or the pool is biased. Personalization is strictly a synthesis (and, later, L2) concern.
 - **Degrade gracefully:** if Redis is unreachable, the pipeline runs cold (today's behavior) — caching is an optimization, never a hard dependency.
+
+### 5.5 Implementation status
+
+- **L1 (destination research cache) — ✅ SHIPPED.** `app/cache.py` + a `research_gate` node. On a hit, the 4 research agents no-op and the synthesizer personalizes from the cached pool. Geocode cache (§6) also lives here. Graceful no-op when `REDIS_URL` is unset.
+- **L2 (vector retrieval) — ⏸ deferred.** Analysis below.
+- **L3 (long-term user memory) — ⏸ deferred.** Analysis below.
+
+> Known L1 limitation to revisit: one of ~5 research queries per agent is vibe-shaped, so the cached pool is *mostly* destination-neutral but slightly tinted toward whoever populated it. The synthesizer re-personalizes selection from the pool, so it's acceptable for now. The clean fix (make research fully vibe-neutral so the cache is purely "destination knowledge") pairs naturally with L2.
+
+### 5.6 L2 — semantic discovery retrieval (deferred): full analysis
+
+**What it is.** Embed every cached discovery (title + body) into a vector and store it in a **RedisVL** index. At synthesis time, embed the trip's intent (`vibes + preferences + query_modifiers`), retrieve the **top-K most similar** discoveries for that destination, and always union in the `anchor`-tagged ones (so famous must-sees can't be filtered out). Feed that focused subset to the synthesizer instead of the whole pool.
+
+**Value it would bring.**
+- **Personalize selection from a shared pool.** This is the missing half of the L1 "research once, personalize many" story: L1 makes the pool reusable; L2 makes each user's *slice* of it relevant. A foodie and a history buff hitting the same cached Goa pool would get different top-K subsets.
+- **Scales the pool.** It lets the cached pool grow large (hundreds of discoveries per hot destination, accumulated across requests) without bloating the synth prompt — you retrieve the best ~15, not all 300. This also unlocks making research fully vibe-neutral and *broad* (gather everything once), since retrieval handles relevance.
+- **Cheaper, tighter synth prompts.** Fewer, more-relevant candidates → shorter prompt → less token cost and less dilution.
+- **Cross-trip reuse of embeddings.** Embed once on cache-write; reuse on every read.
+
+**Why it's deferred (the case against, for now).**
+- **The synthesizer already handles the whole pool.** Today a destination's pool is ≤ ~30–50 discoveries — well within what the synth reads comfortably. Retrieval's marginal benefit is ~zero until pools are large, which only happens *after* we switch to broad vibe-neutral research (not done).
+- **It adds a dependency + moving parts.** A local embedding model (`fastembed`/MiniLM ONNX, ~tens of MB) or a free embedding API, plus a RedisVL index to create/maintain/version. More to operate and test.
+- **Correctness risk on a thin pool.** With small pools, top-K retrieval can *drop* a relevant item that a full-pool LLM would have used; you'd be adding a lossy filter in front of a model that didn't need one.
+
+**Cost / complexity.** Medium. New embedding dependency, an index lifecycle (build on cache-write, query on read, re-index on `CACHE_VERSION` bump), and tuning K + the anchor-union rule. ~zero ongoing $ with local embeddings.
+
+**The trigger to build it.** When **either** (a) we move to broad vibe-neutral research and pools routinely exceed ~60–80 discoveries, **or** (b) synth prompt size / token cost on hot destinations becomes a measured problem, **or** (c) personalization quality from a shared pool is visibly weak (different users getting too-similar itineraries). Until one of those is true, L2 is speculative.
+
+**Integration sketch.** On cache-write, embed each discovery → `HSET` into `nomad:disc:{ver}` (RedisVL schema in §5.3). In the synthesizer path, replace "pass the whole pool" with "embed intent → RedisVL KNN query filtered by `destination_slug`, K≈15, UNION `is_anchor=true`." Everything else (the synth prompt, overlays, geo) is unchanged.
+
+### 5.7 L3 — long-term per-user memory (deferred): full analysis
+
+**What it is.** A compact, durable per-user **preference profile** keyed by `user_id` (e.g. budget lean, pace lean, dietary needs, disliked things, loved places, recurring vibes). After each trip, asynchronously **extract** durable preferences from the user's `preferences` text + the stops they kept/locked, and merge into the profile. On a new trip, **fold the profile into personalization** (the synth prompt) so the system "remembers" them. Optionally a vector-backed memory (`nomad:user:{id}:mem`) for semantic recall of past notes.
+
+**Value it would bring.**
+- **Continuity / the "it knows me" feel.** This is the differentiator — the "agentic memory" idea behind Redis Iris. A returning user who always picks boutique stays and hates touristy buffets shouldn't have to re-say it every trip.
+- **Better cold-start personalization.** Even a sparse new request gets shaped by what we already know about the user.
+- **Compounding quality.** The profile sharpens with every trip, independent of the destination cache.
+
+**Why it's deferred (the case against, for now).**
+- **Needs usage to be worth it.** Long-term memory only pays off for **returning users with multiple trips**. Pre-launch / low-traffic, there's little history to remember, so the feature sits idle.
+- **Cross-service ownership.** Users live in `nomad-api` (Postgres `profiles`). A preference profile arguably belongs there (or at least must be coordinated), not solely in this service's Redis — a polyglot-boundary decision (`rules/db-contract.md`).
+- **Privacy + correctness.** Storing inferred user preferences raises consent/staleness questions (people's tastes change; a wrong "remembered" preference is worse than none). Needs an extraction quality bar + a way for users to see/edit/clear it.
+- **Extraction is non-trivial.** Deciding *what* is a durable preference vs. a one-off ("wanted a beach this once") is its own prompt-engineering + eval task.
+
+**Cost / complexity.** Medium–high. A profile store, an async extraction step after each trip, synth-prompt integration, plus the cross-service ownership + privacy decisions.
+
+**The trigger to build it.** When there are **real returning users with ≥2–3 trips each**, and we've decided where the profile of record lives (Redis here vs. Postgres in `nomad-api`). Before that, it's premature.
+
+**Integration sketch.** After `mark_trip_ready`, enqueue an async "memory update": LLM-extract durable prefs from `preferences` + kept stops → merge into `nomad:user:{id}:profile`. In `run_synthesizer`, load the profile and prepend a "What we know about this traveler" block (below the per-trip `preferences`, which always wins on conflict). Gate the whole feature behind a flag and a user-visible "memory" they can clear.
 
 ---
 

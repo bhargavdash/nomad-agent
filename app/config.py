@@ -22,6 +22,16 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_ROLE_KEY: str = ""
     INTERNAL_AGENT_SECRET: str = ""
 
+    # --- Cache (Milestone C) ---
+    # Redis connection. Empty → caching is DISABLED and the pipeline runs cold
+    # (every request re-researches). Never a hard dependency.
+    REDIS_URL: str = ""
+    # Bump to invalidate all cached research at once (e.g. after a schema/agent
+    # change). Part of every cache key.
+    CACHE_VERSION: str = "v1"
+    # Destination research is reusable but ages — bound staleness.
+    RESEARCH_CACHE_TTL_DAYS: int = 45
+
     # --- Tool API keys ---
     YOUTUBE_API_KEY: str = ""  # required for YT agent
     TAVILY_API_KEY: str = ""  # required for Google blog agent
@@ -56,10 +66,12 @@ class Settings(BaseSettings):
     # cached call per destination, ~50 tokens out. Cheap model is fine.
     LLM_SIGNALS_CLASSIFIER_PROVIDER: str = "groq"
     LLM_SIGNALS_CLASSIFIER_MODEL: str = "llama-3.3-70b-versatile"
-    # Geo city-circuit picker (Milestone D) — small output (ordered city list),
-    # so a cheap/fast model is fine.
-    LLM_GEO_PLANNER_PROVIDER: str = "groq"
-    LLM_GEO_PLANNER_MODEL: str = "llama-3.3-70b-versatile"
+    # Geo city-circuit picker (Milestone D) — small output (ordered city list).
+    # Defaults to Cerebras: it's a tiny call, and keeping it off Groq avoids
+    # competing with the research agents for Groq's tight ~100k tokens/day cap
+    # (which would silently degrade the geo layer).
+    LLM_GEO_PLANNER_PROVIDER: str = "cerebras"
+    LLM_GEO_PLANNER_MODEL: str = "qwen-3-235b-a22b-instruct-2507"
 
     # --- Provider API keys (optional — only checked when used) ---
     GROQ_API_KEY: str = ""

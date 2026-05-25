@@ -14,6 +14,8 @@ import logging
 
 import httpx
 
+from app import cache as redis_cache
+
 logger = logging.getLogger(__name__)
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
@@ -40,8 +42,17 @@ async def geocode(query: str) -> tuple[float, float] | None:
     if key in _cache:
         return _cache[key]
 
+    # Cross-process L1: Redis (persists geocodes ~forever — geography is stable).
+    persisted = await redis_cache.get_cached_geocode(query)
+    if persisted is not None:
+        _cache[key] = persisted
+        return persisted
+
     global _last_call_at
     async with _rate_lock:
+        # Another coroutine may have fetched this while we waited for the lock.
+        if key in _cache:
+            return _cache[key]
         # Space calls ≥ _MIN_INTERVAL_SECONDS apart.
         loop = asyncio.get_event_loop()
         wait = _MIN_INTERVAL_SECONDS - (loop.time() - _last_call_at)
@@ -55,6 +66,8 @@ async def geocode(query: str) -> tuple[float, float] | None:
         _last_call_at = loop.time()
 
     _cache[key] = result
+    if result is not None:
+        await redis_cache.set_cached_geocode(query, result)
     return result
 
 

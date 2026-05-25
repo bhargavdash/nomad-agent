@@ -109,7 +109,9 @@ Each workstream states the problem it solves, why it matters, what changes, and 
 - **Success:** measurably richer synthesis narratives at $0 additional cost; no increase in hard failures thanks to fallback.
 - **Effort:** S. **Risk:** low–medium (free-tier queueing — mitigated by fallback).
 
-### WS6 — Redis context & caching layer *(solves P5; the "Redis Iris / agent memory" ask)*
+### WS6 — Redis context & caching layer *(solves P5; the "Redis Iris / agent memory" ask)* — ✅ L1 SHIPPED; L2/L3 deferred
+**Shipped:** **L1** destination research cache + geocode cache (`app/cache.py`, `research_gate` node) with graceful degradation when `REDIS_URL` is unset. A repeat-destination HIT skips all 4 research agents (~13 LLM + ~50 API calls) and relieves the Groq cap.
+**Deferred (with full rationale in [`SYSTEM_DESIGN.md`](./SYSTEM_DESIGN.md) §5.6/§5.7):** **L2** semantic retrieval (only pays off once pools are large / research goes vibe-neutral) and **L3** long-term user memory (needs real returning users + a cross-service ownership decision). Triggers to build each are documented there.
 - **Problem:** no caching; every request re-pays the full research cost; no cross-trip memory of a user's tastes.
 - **Why:** destination research is the expensive, *reusable* artifact. Caching it per-destination turns a ~13–15-LLM-call, ~60s cold request into a ~1-call, few-second warm request — and unlocks per-user memory.
 - **What changes (layered — see `SYSTEM_DESIGN.md` §5 for the full design and the options analysis):**
