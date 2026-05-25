@@ -537,7 +537,7 @@ def _coerce_tags_for_stop(tags: list[str]) -> list[str]:
 
 def _coerce_time(time_str: str) -> str:
     """Best-effort coercion to AIStop.time pattern '\\d{1,2}:\\d{2}'."""
-    s = time_str.strip
+    s = time_str.strip()
     m = re.match(r"^(\d{1,2}):(\d{2})$", s)
     if m:
         return f"{int(m.group(1))}:{m.group(2)}"
