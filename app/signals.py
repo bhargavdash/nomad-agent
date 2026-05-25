@@ -64,6 +64,10 @@ class TravelSignals:
     # would. Distinct from `warnings`, which are hazards surfaced on Day 1.
     seasonal_tips: list[str] = field(default_factory=list)
 
+    # Local currency for budget figures, e.g. "INR (₹)". None when ambiguous —
+    # the synthesizer is then told to infer it from the destination.
+    currency_hint: str | None = None
+
     # Canonical must-visit landmarks seeded by LLM, independent of vibe-extraction.
     top_anchors: list[str] = field(default_factory=list)
 
@@ -511,6 +515,44 @@ def _build_seasonal_tips(
     return tips
 
 
+# Destination-keyword → local currency. Multi-currency regions (Europe, SEA,
+# Americas, Oceania) need country-level overrides; India is unambiguous by
+# region. Anything not matched returns None and the synthesizer infers it.
+_CURRENCY_OVERRIDES: dict[str, str] = {
+    "thailand": "THB (฿)", "bangkok": "THB (฿)", "phuket": "THB (฿)",
+    "japan": "JPY (¥)", "tokyo": "JPY (¥)",
+    "vietnam": "VND (₫)", "hanoi": "VND (₫)", "ho chi minh": "VND (₫)",
+    "singapore": "SGD (S$)",
+    "indonesia": "IDR (Rp)", "bali": "IDR (Rp)",
+    "malaysia": "MYR (RM)", "kuala lumpur": "MYR (RM)",
+    "philippines": "PHP (₱)", "manila": "PHP (₱)",
+    "sri lanka": "LKR (Rs)",
+    "uk": "GBP (£)", "london": "GBP (£)", "england": "GBP (£)", "scotland": "GBP (£)",
+    "switzerland": "CHF", "zurich": "CHF", "geneva": "CHF",
+    "usa": "USD ($)", "united states": "USD ($)", "new york": "USD ($)",
+    "nyc": "USD ($)", "los angeles": "USD ($)", "san francisco": "USD ($)",
+    "canada": "CAD (C$)", "toronto": "CAD (C$)", "vancouver": "CAD (C$)",
+    "mexico": "MXN ($)", "cancun": "MXN ($)",
+    "australia": "AUD (A$)", "sydney": "AUD (A$)", "melbourne": "AUD (A$)",
+    "new zealand": "NZD (NZ$)", "auckland": "NZD (NZ$)", "queenstown": "NZD (NZ$)",
+}
+
+
+def _currency_hint(region: str, destination_lower: str) -> str | None:
+    """Local currency for budget figures. India is unambiguous by region;
+    multi-currency regions use country overrides; Eurozone defaults to EUR.
+    Returns None when unknown so the synthesizer infers from the destination."""
+    if region == "india":
+        return "INR (₹)"
+    for keyword, currency in _CURRENCY_OVERRIDES.items():
+        if keyword in destination_lower:
+            return currency
+    if region == "europe":
+        # UK / Switzerland already handled above; default the rest to euro.
+        return "EUR (€)"
+    return None
+
+
 def _build_query_modifiers(
     base: list[str],
     season: str,
@@ -602,6 +644,7 @@ def extract_signals(trip_params: TripParams) -> TravelSignals:
     )
     warnings = _build_warnings(season, region, destination_lower, weather_hint)
     seasonal_tips = _build_seasonal_tips(season, region, month, destination_lower)
+    currency_hint = _currency_hint(region, destination_lower)
 
     return TravelSignals(
         region=region,
@@ -617,6 +660,7 @@ def extract_signals(trip_params: TripParams) -> TravelSignals:
         query_modifiers=query_modifiers,
         warnings=warnings,
         seasonal_tips=seasonal_tips,
+        currency_hint=currency_hint,
     )
 
 
@@ -866,6 +910,7 @@ async def enrich_signals_with_llm(
     )
     warnings = _build_warnings(season, classification.region, dest_key, weather_hint)
     seasonal_tips = _build_seasonal_tips(season, classification.region, month, dest_key)
+    currency_hint = _currency_hint(classification.region, dest_key)
 
     logger.info(
         "signals.llm_enriched dest=%r region=%s hemisphere=%s season=%s",
@@ -889,4 +934,5 @@ async def enrich_signals_with_llm(
         query_modifiers=query_modifiers,
         warnings=warnings,
         seasonal_tips=seasonal_tips,
+        currency_hint=currency_hint,
     )

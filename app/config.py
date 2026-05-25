@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     # cached call per destination, ~50 tokens out. Cheap model is fine.
     LLM_SIGNALS_CLASSIFIER_PROVIDER: str = "groq"
     LLM_SIGNALS_CLASSIFIER_MODEL: str = "llama-3.3-70b-versatile"
+    # Geo city-circuit picker (Milestone D) — small output (ordered city list),
+    # so a cheap/fast model is fine.
+    LLM_GEO_PLANNER_PROVIDER: str = "groq"
+    LLM_GEO_PLANNER_MODEL: str = "llama-3.3-70b-versatile"
 
     # --- Provider API keys (optional — only checked when used) ---
     GROQ_API_KEY: str = ""

@@ -41,6 +41,7 @@ from typing import Any, Literal
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+from app.geo import GeoBrief
 from app.llm.factory import get_structured_llm
 from app.schemas import (
     AIDay,
@@ -343,6 +344,8 @@ def _format_signal_summary(signals: TravelSignals) -> str:
         parts.append("Warnings: " + " | ".join(signals.warnings))
     if signals.seasonal_tips:
         parts.append("Seasonal tips: " + " | ".join(signals.seasonal_tips))
+    if signals.currency_hint:
+        parts.append(f"Local currency: {signals.currency_hint}")
     return "\n".join(parts)
 
 
@@ -351,6 +354,7 @@ def _build_prompt(
     signals: TravelSignals,
     candidates: list[_PlaceCandidate],
     target_counts: list[int],
+    geo_brief: GeoBrief | None = None,
 ) -> tuple[str, str]:
     """Return (system_prompt, user_prompt)."""
     target_per_day = target_counts[0] if target_counts else MIN_STOPS_PER_DAY
@@ -385,6 +389,8 @@ def _build_prompt(
         if prefs
         else ""
     )
+    geo_block = geo_brief.to_prompt_block() if geo_brief and not geo_brief.is_empty() else ""
+    geo_section = f"\n{geo_block}\n" if geo_block else ""
     user = (
         f"Destination: {trip_params.destination}\n"
         f"Trip dates: {trip_params.date_from} → {trip_params.date_to}\n"
@@ -400,6 +406,7 @@ def _build_prompt(
         f"{prefs_block}"
         f"\n{voice_cues}"
         f"\n=== Signal summary ===\n{_format_signal_summary(signals)}\n"
+        f"{geo_section}"
         f"\n=== Research candidates ({len(candidates)}) ===\n"
         f"{_format_candidates(candidates)}\n"
         f"\nProduce the day-by-day itinerary now. Reference candidate titles "
@@ -429,9 +436,12 @@ async def _extract_via_llm(
     signals: TravelSignals,
     candidates: list[_PlaceCandidate],
     target_counts: list[int],
+    geo_brief: GeoBrief | None = None,
 ) -> _LLMItineraryDraft | None:
     """Single LLM call. Returns None on error so caller can retry or fall back."""
-    system, user = _build_prompt(trip_params, signals, candidates, target_counts)
+    system, user = _build_prompt(
+        trip_params, signals, candidates, target_counts, geo_brief
+    )
     try:
         # Cerebras-235B primary with Groq-70B fallback (see factory). Structured
         # output + provider fallback are composed in get_structured_llm.
@@ -964,6 +974,7 @@ async def run_synthesizer(
     trip_params: TripParams,
     signals: TravelSignals,
     discoveries: list[ResearchDiscovery],
+    geo_brief: GeoBrief | None = None,
 ) -> AIItinerary:
     """Compose the final itinerary from all discoveries.
 
@@ -998,7 +1009,7 @@ async def run_synthesizer(
 
     for attempt in range(1, MAX_LLM_ATTEMPTS + 1):
         draft = await _extract_via_llm(
-            trip_params, signals, candidates, target_counts
+            trip_params, signals, candidates, target_counts, geo_brief
         )
         if draft is None:
             logger.warning(

@@ -1,0 +1,676 @@
+{
+  "stats_places": 0,
+  "stats_tips": 0,
+  "stats_photo_stops": 0,
+  "route_summary": "Jaipur (3) → Bikaner (2) → Jodhpur (3) → Jaisalmer (3)",
+  "transport_strategy": "Travel between cities by private cab — reliable for long distances and group comfort. Use verified drive times: Jaipur → Bikaner (~7h10m), Bikaner → Jodhpur (~5h1m), Jodhpur → Jaisalmer (~6h12m). Within cities, hire auto-rickshaws or walk in old quarters. Book cabs in advance due to peak season demand.",
+  "seasonal_tips": [
+    "Peak season — book trains, hotels, and marquee experiences well ahead.",
+    "Nights get cold this time of year — pack layers/thermals, especially in desert or hill areas."
+  ],
+  "stay_by_city": {
+    "Jaipur": "Old City near Johari Bazaar — heritage haveli with courtyard rooms",
+    "Bikaner": "Near Junagarh Fort — mid-range heritage guesthouse",
+    "Jodhpur": "Blue City (Brahmpuri) — boutique haveli with rooftop views",
+    "Jaisalmer": "Fort area or near Amar Sagar — heritage-style guesthouse with desert charm"
+  },
+  "budget_estimate": "₹1,80,000–2,20,000 for two (includes stays, cabs, food, entry fees)",
+  "discoveries": [
+    {
+      "id": "f398fed6-65b7-43af-9eed-20cc695f9afd",
+      "title": "Hawa Mahal",
+      "body": "Hawa Mahal — a must-visit landmark in Rajasthan, India. Pre-validated anchor stop. Check local advisories for opening hours.",
+      "tags": [
+        "anchor_hint"
+      ],
+      "source": "maps"
+    },
+    {
+      "id": "d0567f45-2db7-4696-adbc-aa32ebdc9efa",
+      "title": "City Palace Jaipur",
+      "body": "City Palace Jaipur — a must-visit landmark in Rajasthan, India. Pre-validated anchor stop. Check local advisories for opening hours.",
+      "tags": [
+        "anchor_hint"
+      ],
+      "source": "maps"
+    },
+    {
+      "id": "29b95b01-960a-4fcd-9e09-b8e5f954c83e",
+      "title": "Jantar Mantar Jaipur",
+      "body": "Jantar Mantar Jaipur — a must-visit landmark in Rajasthan, India. Pre-validated anchor stop. Check local advisories for opening hours.",
+      "tags": [
+        "anchor_hint"
+      ],
+      "source": "maps"
+    },
+    {
+      "id": "212026f8-d653-4f30-8620-5c782fd46f3d",
+      "title": "Amber Fort",
+      "body": "Amber Fort — a must-visit landmark in Rajasthan, India. Pre-validated anchor stop. Check local advisories for opening hours.",
+      "tags": [
+        "anchor_hint"
+      ],
+      "source": "maps"
+    },
+    {
+      "id": "d88f09c5-8c65-4850-8762-b3dad9e6d318",
+      "title": "Mehrangarh Fort",
+      "body": "Mehrangarh Fort — a must-visit landmark in Rajasthan, India. Pre-validated anchor stop. Check local advisories for opening hours.",
+      "tags": [
+        "anchor_hint"
+      ],
+      "source": "maps"
+    },
+    {
+      "id": "19118f24-c1b4-42b6-b2ba-9ba904888b8a",
+      "title": "Lake Palace Udaipur",
+      "body": "Lake Palace Udaipur — a must-visit landmark in Rajasthan, India. Pre-validated anchor stop. Check local advisories for opening hours.",
+      "tags": [
+        "anchor_hint"
+      ],
+      "source": "maps"
+    }
+  ],
+  "days": [
+    {
+      "dayNumber": 1,
+      "city": "Jaipur",
+      "title": "Arrival & Pink City First Light",
+      "description": "Settle into your haveli near Johari Bazaar, then start at Hawa Mahal by 8:30 — the morning light hits the honeycomb facade just right. Walk into the walled city, weaving through bangle carts in Tripolia Bazaar before ending at Jantar Mantar as the sun dips. Skip dinner at tourist-heavy restaurants; go for thali at a dhaba-style joint near the palace.",
+      "highlights": [
+        "Photo: Hawa Mahal in morning golden light",
+        "Shop: lac bangles at Tripolia Bazaar",
+        "Eat: dal baati churma at LMB (Lalit Moti Bhojanalay)",
+        "Sunset at Jantar Mantar observatory"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "8:30",
+          "ampm": "AM",
+          "duration": "1h",
+          "name": "Hawa Mahal",
+          "description": "Five-story pink sandstone facade with 953 jharokhas — go by 8:30 AM to avoid crowds and catch soft light for photos. Enter through the rear for shorter queues.",
+          "source": "maps",
+          "tags": [
+            "📸",
+            "morning"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "10:00",
+          "ampm": "AM",
+          "duration": "1.5h",
+          "name": "Tripolia Bazaar",
+          "description": "Bustling market selling lacquered bangles, textiles, and brassware. Best for shopping between 10 AM–2 PM. Haggle gently — prices are already retail-low.",
+          "source": "maps",
+          "tags": [
+            "🛍️",
+            "local"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "12:00",
+          "ampm": "PM",
+          "duration": "2h",
+          "name": "City Palace Jaipur",
+          "description": "Still part-residence of the royal family, this sprawling complex blends Rajput and Mughal styles. Don’t miss the Chandra Mahal courtyard and royal costumes in the museum.",
+          "source": "maps",
+          "tags": [
+            "🏰",
+            "heritage"
+          ]
+        },
+        {
+          "sortOrder": 4,
+          "time": "4:00",
+          "ampm": "PM",
+          "duration": "1h",
+          "name": "Jantar Mantar Jaipur",
+          "description": "18th-century astronomical observatory with the world’s largest stone sundial. Visit late afternoon — the shadows stretch dramatically by 4 PM.",
+          "source": "maps",
+          "tags": [
+            "🔭",
+            "sunset"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 2,
+      "city": "Jaipur",
+      "title": "Amber Fort & Royal Crafts",
+      "description": "Start at Amber Fort by 8:30 — cross the moat on foot or hire a shared jeep up the hill. Explore Sheesh Mahal and Ganesh Pol before descending to shop for miniature paintings near Ganesh Talkies by noon. After a dhaba thali lunch, hit Johari Bazaar for genuine silver jewelry and block prints. End at a rooftop café for sunset views over Nahargarh.",
+      "highlights": [
+        "Amber Fort early to beat crowds",
+        "Paintings: buy from artist stalls near Ganesh Talkies",
+        "Eat: Rajasthani thali at Chokhi Dhani (dhaba-style, not tourist buffet)",
+        "Photo: sunset from Jaipur rooftops"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "8:30",
+          "ampm": "AM",
+          "duration": "2.5h",
+          "name": "Amber Fort",
+          "description": "Hilltop fort built by Raja Man Singh I in 1592, with mirrored Sheesh Mahal and panoramic ramparts. Arrive by 8:30 AM to avoid tour buses — walk up for views, or take jeep (₹150 return).",
+          "source": "maps",
+          "tags": [
+            "🏰",
+            "heritage"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "11:30",
+          "ampm": "AM",
+          "duration": "1h",
+          "name": "Ganesh Talkies Market",
+          "description": "Local artist stalls sell miniature Rajasthani paintings on cloth and paper — look for the one with peacocks and desert scenes. Bargain to 60% of starting price.",
+          "source": "maps",
+          "tags": [
+            "🎨",
+            "crafts"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "1:00",
+          "ampm": "PM",
+          "duration": "1.5h",
+          "name": "Johari Bazaar",
+          "description": "Famous for genuine Kundan and silver jewelry — avoid the touts outside Bapu Bazaar. Go to the lanes behind for better prices and local block-print fabrics.",
+          "source": "maps",
+          "tags": [
+            "🛍️",
+            "crafts"
+          ]
+        },
+        {
+          "sortOrder": 4,
+          "time": "5:15",
+          "ampm": "PM",
+          "duration": "45m",
+          "name": "Nahargarh Fort viewpoint",
+          "description": "Not the full fort visit — just the paid viewpoint near the gate (₹50) gives a sweeping sunset panorama of Jaipur. Arrive by 5:15 PM to claim a spot.",
+          "source": "maps",
+          "tags": [
+            "🌅",
+            "photo"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 3,
+      "city": "Jaipur",
+      "title": "Craft Villages & Desert Prep",
+      "description": "Take a morning trip to Sanganer and Bagru — 30 minutes out — to see hand-block printing and paper-making. Tour a working dhurrie workshop, then return for a late lunch before your long drive to Bikaner. Pack warm clothes — desert nights drop below 10°C.",
+      "highlights": [
+        "Craft: block-print fabrics at Sanganer workshop",
+        "Buy: handmade paper rolls at Bagru artisan center",
+        "Packing tip: bring thermals for desert nights and early mornings"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "9:30",
+          "ampm": "AM",
+          "duration": "1.5h",
+          "name": "Sanganer",
+          "description": "Famous for hand-block printed textiles and Sanganeri paper. Visit a working workshop — most open 9:30–12:30. Buy cotton dupattas and greeting cards straight from makers.",
+          "source": "maps",
+          "tags": [
+            "🖨️",
+            "craft"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "11:30",
+          "ampm": "AM",
+          "duration": "1.5h",
+          "name": "Bagru",
+          "description": "Indigo and natural dye village with family-run printing units. Look for deep blue textiles dyed in pits — best for photos in morning light.",
+          "source": "maps",
+          "tags": [
+            "🎨",
+            "photo"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "2:00",
+          "ampm": "PM",
+          "duration": "7h10m",
+          "name": "Drive to Bikaner",
+          "description": "358 km, ~7h10m by private cab. Depart after lunch; stop at a roadside dhaba near Lalsar for rajma-chawal. Book your cab the night before — peak season means no last-minute hires.",
+          "source": "maps",
+          "tags": [
+            "🚗",
+            "travel"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 4,
+      "city": "Bikaner",
+      "title": "Junagarh Fort & Local Eats",
+      "description": "Arrive mid-morning and check into your heritage guesthouse. Start with Junagarh Fort — less crowded than Amber but equally ornate. Then explore Lalgarh Palace and end the day strolling around Karni Cinema Market for local snacks. Night air is cold — wrap up before dinner.",
+      "highlights": [
+        "Junagarh Fort: less touristy, carved marble interiors",
+        "Eat: ghevar and kachori at Laxmi Mishthan Bhandar",
+        "Cold nights: pack a woolen layer"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "11:00",
+          "ampm": "AM",
+          "duration": "2h",
+          "name": "Junagarh Fort",
+          "description": "A rare sandstone fort not on a hill — built on flat land in 1594 by Raja Rai Singh. The Anup Mahal has intricate gold-leaf ceilings; go before 11 AM for soft indoor light.",
+          "source": "maps",
+          "tags": [
+            "🏰",
+            "heritage"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "1:30",
+          "ampm": "PM",
+          "duration": "1h",
+          "name": "Lalgarh Palace",
+          "description": "Turn-of-the-century royal residence with Art Deco touches and a heritage hotel. Walk the gardens and admire the yellow Jharokhas from the outside — entry is mainly for hotel guests.",
+          "source": "maps",
+          "tags": [
+            "🏡",
+            "photo"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "4:30",
+          "ampm": "PM",
+          "duration": "1.5h",
+          "name": "Karni Cinema Market",
+          "description": "Local food lane near the old cinema — try pyaaz kachori and camel milk kulfi from the blue cart. Cash only; closes by 8 PM.",
+          "source": "maps",
+          "tags": [
+            "🍽️",
+            "local"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 5,
+      "city": "Bikaner",
+      "title": "Camel Ranch & Desert Vibes",
+      "description": "Drive out to Deshnok for Karni Mata Temple — yes, the rat one — but arrive by 8:30 to avoid the worst crowds. After, head to a camel breeding farm nearby to meet the ‘ships of the desert’ and ride one at dawn-light speed. Return to Bikaner for a late lunch and drive to Jodhpur in the afternoon.",
+      "highlights": [
+        "Karni Mata Temple: watch your step among the 20,000 rats",
+        "Camel interaction: short ride or photo op at breeding farm",
+        "Drive: Bikaner → Jodhpur (~5h1m), depart by 3 PM"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "8:30",
+          "ampm": "AM",
+          "duration": "1.5h",
+          "name": "Karni Mata Temple",
+          "description": "Temple swarming with sacred rats — locals believe they’re reincarnated. Wear closed shoes and avoid stepping close to food bowls. Open from 6:30 AM; go just after 8:30 for fewer crowds.",
+          "source": "maps",
+          "tags": [
+            "🐀",
+            "unique"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "10:30",
+          "ampm": "AM",
+          "duration": "1.5h",
+          "name": "Bikaner Camel Breeding Farm",
+          "description": "Government-run center with healthy camels and trained handlers. For photography, the morning light (10–11:30) is perfect. Short rides cost ₹300 for 10 minutes.",
+          "source": "maps",
+          "tags": [
+            "🐪",
+            "photo"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "3:00",
+          "ampm": "PM",
+          "duration": "5h1m",
+          "name": "Drive to Jodhpur",
+          "description": "251 km, ~5h1m — leave Bikaner by 3 PM. Scenery shifts from arid scrub to rocky outcrops. Stop at a dhaba near Phalodi for chai and paratha.",
+          "source": "maps",
+          "tags": [
+            "🚗",
+            "travel"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 6,
+      "city": "Jodhpur",
+      "title": "Blue City Arrival & Rooftop Views",
+      "description": "Arrive by evening, check into a haveli in Brahmpuri (the blue quarter), and take a short walk through the narrow lanes. Pick up bandhani scarves from a roadside stall, then head to a rooftop café near Clock Tower for golden-hour views over the indigo houses and Mehrangarh Fort.",
+      "highlights": [
+        "First glimpse: Jodhpur’s blue city from rooftop at sunset",
+        "Shop: bandhani textiles from street vendors",
+        "Eat: dal baati at Sardar Coffee House (no coffee, just thali)"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "4:30",
+          "ampm": "PM",
+          "duration": "1h",
+          "name": "Clock Tower Market",
+          "description": "Spice-scented lanes around Ghantaghar selling everything from mojris (juttis) to saffron. Go late afternoon to dodge midday heat and crowds.",
+          "source": "maps",
+          "tags": [
+            "🛍️",
+            "local"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "5:00",
+          "ampm": "PM",
+          "duration": "1.5h",
+          "name": "Brahmpuri (Blue City)",
+          "description": "Neighborhood of over 1,000 indigo-painted homes — traditionally painted by Brahmins to ward off heat and insects. Best photo lane: near Chautar Bazaar, between 4:30–6 PM.",
+          "source": "maps",
+          "tags": [
+            "🏘️",
+            "photo"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "6:30",
+          "ampm": "PM",
+          "duration": "1.5h",
+          "name": "Sardar Coffee House",
+          "description": "No coffee, no frills — just packed tables serving massive Rajasthani thalis (₹180/person). Dal baati churma is cooked in clay ovens. Open from 7 AM–10 PM. Cash only.",
+          "source": "maps",
+          "tags": [
+            "🍽️",
+            "local"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 7,
+      "city": "Jodhpur",
+      "title": "Mehrangarh Fort & Stepwells",
+      "description": "Begin at Mehrangarh Fort by 9:00 — climb the ramparts for skyline views, then tour the palaces and royal cenotaphs across the road. After lunch, visit Mandore Gardens and its ghostly halls. Return by sunset for rooftop chai with fort views — bring a thermos; it’ll be cold.",
+      "highlights": [
+        "Mehrangarh Fort: skyline views from the upper ramparts",
+        "Photo: cenotaphs at Jaswant Thada in evening light",
+        "Eat: mirchi vada and lassi at Jodhpur Sweets"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "9:00",
+          "ampm": "AM",
+          "duration": "2.5h",
+          "name": "Mehrangarh Fort",
+          "description": "Imposing 15th-century fort rising 125m above the city. Don’t miss Phool Mahal (Hall of Flowers) and the glass-tiled Sheesh Mahal. Audio guide recommended — ₹200.",
+          "source": "maps",
+          "tags": [
+            "🏰",
+            "heritage"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "12:30",
+          "ampm": "PM",
+          "duration": "45m",
+          "name": "Jaswant Thada",
+          "description": "Marble cenotaph built in 1899 — serene white memorial across from the fort. Light reflects beautifully in late afternoon; spend 45 minutes walking the grounds.",
+          "source": "maps",
+          "tags": [
+            "🕊️",
+            "sunset"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "2:00",
+          "ampm": "PM",
+          "duration": "1.5h",
+          "name": "Mandore Gardens",
+          "description": "Former royal capital with crumbling halls and leg-end sculptures. Great for atmosphere and quiet wandering — open from 9 AM to 5 PM.",
+          "source": "maps",
+          "tags": [
+            "🌿",
+            "heritage"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 8,
+      "city": "Jodhpur",
+      "title": "Local Life & Craft Workshops",
+      "description": "Take a morning cycle rickshaw tour through old neighborhoods — see temples, spice grinders, and haveli facades. After lunch, visit a mojari (handmade sandal) workshop in Sojati Gate. Then wrap up with chai and snacks at a local sweet shop before your drive to Jaisalmer tomorrow.",
+      "highlights": [
+        "Cycle tour: behind-the-scenes of Jodhpur’s old city",
+        "Buy: leather mojaris at Sojati Gate workshop",
+        "Pack: thermals — Jaisalmer nights colder than Jodhpur"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "9:00",
+          "ampm": "AM",
+          "duration": "2h",
+          "name": "Old City Rickshaw Tour",
+          "description": "Half-day ride through unmarked lanes — guide shows homes with carved wood doors and women grinding spices. Book via your haveli; costs ₹500 for two.",
+          "source": "maps",
+          "tags": [
+            "🚲",
+            "local"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "11:30",
+          "ampm": "AM",
+          "duration": "1h",
+          "name": "Sojati Gate Mojari Workshop",
+          "description": "Family-run shop crafting mojaris in camel leather and mirror work. Watch them stitch and try on a pair — bargaining to ₹300 is fair.",
+          "source": "maps",
+          "tags": [
+            "👞",
+            "craft"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "5:00",
+          "ampm": "PM",
+          "duration": "1h",
+          "name": "Jodhpur Sweets",
+          "description": "Popular local spot for mirchi vada (stuffed chili fritters) and thick lassi. Go before 8 PM — shuts early. Try the jalebi with rabri.",
+          "source": "maps",
+          "tags": [
+            "🍽️",
+            "local"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 9,
+      "city": "Jaisalmer",
+      "title": "Golden Fort & Desert Lights",
+      "description": "Arrive by late afternoon after a 6h12m drive — check into your fort-area guesthouse and freshen up. Then walk into Jaisalmer Fort before sunset — the golden sandstone glows like fire. Shop for leather juttis and turban fabrics inside, then eat dinner at a rooftop spot with folk music.",
+      "highlights": [
+        "Photo: Jaisalmer Fort at golden hour",
+        "Shop: leather items and bandhani dupattas inside fort bazaar",
+        "Eat: rajma-chawal at 1st Gate Restaurant"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "9:00",
+          "ampm": "AM",
+          "duration": "6h12m",
+          "name": "Drive to Jaisalmer",
+          "description": "310 km, ~6h12m — depart Jodhpur by 9:00 AM to arrive by 4 PM. Stop at a dhaba near Pokhran for lemon tea and kachori.",
+          "source": "maps",
+          "tags": [
+            "🚗",
+            "travel"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "5:30",
+          "ampm": "PM",
+          "duration": "2h",
+          "name": "Jaisalmer Fort",
+          "description": "Living fort with homes, shops, and hotels inside — one of only three in India. Enter on foot; golden stone glows most around 5:30 PM. Acoustic folk shows start at rooftop cafés by 6:30 PM.",
+          "source": "maps",
+          "tags": [
+            "🏰",
+            "sunset"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "7:30",
+          "ampm": "PM",
+          "duration": "1.5h",
+          "name": "1st Gate Restaurant",
+          "description": "No-frills rooftop eatery serving large Rajasthani thalis (₹170/person). Mirchi bhaji and rabri are standouts. Open till 10 PM.",
+          "source": "maps",
+          "tags": [
+            "🍽️",
+            "local"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 10,
+      "city": "Jaisalmer",
+      "title": "Sam Sand Dunes & Cultural Evening",
+      "description": "Leave by 3 PM for Sam Sand Dunes — arrive 90 minutes before sunset to explore the desert on foot or camel. The light turns the dunes amber then violet. Later, a folk show with fire dancers and kalbeliya music begins at 6:30 PM — bring a jacket, it’ll be breezy.",
+      "highlights": [
+        "Camel ride: best at sunset, avoid morning heat",
+        "Photo: dunes in golden hour with camels",
+        "Eat: thali at desert camp (included with show)",
+        "Cold desert nights: pack thermals"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "1:00",
+          "ampm": "PM",
+          "duration": "1h30m",
+          "name": "Lunch in Jaisalmer",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Jaisalmer you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🍽️"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "4:00",
+          "ampm": "PM",
+          "duration": "3h",
+          "name": "Sam Sand Dunes",
+          "description": "30 km west of Jaisalmer — golden hour starts around 5:30 PM. Hire a camel (₹500 for 45min) or walk the dunes. Avoid morning visits — too hot and harsh light.",
+          "source": "maps",
+          "tags": [
+            "🐪",
+            "sunset"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "6:30",
+          "ampm": "PM",
+          "duration": "2h",
+          "name": "Desert Cultural Show",
+          "description": "Evening performance with folk dancers, fire-eaters, and local musicians. Thali dinner included with most entry packages (₹800/person). Arrive by 5:30 PM.",
+          "source": "maps",
+          "tags": [
+            "🎭",
+            "evening"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 11,
+      "city": "Jaisalmer",
+      "title": "Last Light & Departure",
+      "description": "Spend the morning revisiting the fort or shopping for souvenirs at Bada Bagh’s truck-stop stalls. Alternatively, drive out to Patwon Ki Haveli — five ornate merchant homes carved from yellow stone. Leave for airport by 1 PM if flying, or pack for next leg.",
+      "highlights": [
+        "Haveli visit: Patwon Ki Haveli carvings at morning light",
+        "Buy: camelskin bags and pyjamas at fort bazaar",
+        "Departure: pack warm clothes — desert mornings are cold"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "9:00",
+          "ampm": "AM",
+          "duration": "1.5h",
+          "name": "Patwon Ki Haveli",
+          "description": "Group of five merchant havelis with intricate gold-lac carvings on sandstone — best seen in morning light (9–11:30). Most ornate is Nathmal Ki Haveli nearby.",
+          "source": "maps",
+          "tags": [
+            "🏛️",
+            "heritage"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "11:00",
+          "ampm": "AM",
+          "duration": "1.5h",
+          "name": "Jaisalmer Fort Bazaar",
+          "description": "Final souvenir stop — look for camelskin bags, mirror-work textiles, and golden stone jewelry. Bargain hard — start at 40% of asking.",
+          "source": "maps",
+          "tags": [
+            "🛍️",
+            "final"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "1:00",
+          "ampm": "PM",
+          "duration": "30m",
+          "name": "Depart Jaisalmer",
+          "description": "If flying out, head to airport by 1 PM — it’s 6 km. If extending, pack thermals — desert mornings stay chilly even at peak season.",
+          "source": "maps",
+          "tags": [
+            "🛫",
+            "departure"
+          ]
+        }
+      ]
+    }
+  ]
+}

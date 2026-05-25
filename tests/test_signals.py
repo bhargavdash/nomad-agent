@@ -64,6 +64,15 @@ def test_seasonal_tips_empty_for_temperate_shoulder() -> None:
     assert sig.seasonal_tips == []
 
 
+def test_currency_hint_by_destination() -> None:
+    assert extract_signals(_trip(destination="Rajasthan, India")).currency_hint == "INR (₹)"
+    assert extract_signals(_trip(destination="Paris, France")).currency_hint == "EUR (€)"
+    assert extract_signals(_trip(destination="Bangkok, Thailand")).currency_hint == "THB (฿)"
+    assert extract_signals(_trip(destination="London, UK")).currency_hint == "GBP (£)"
+    # Unknown / ambiguous → None (synthesizer infers from the destination).
+    assert extract_signals(_trip(destination="Atlantis")).currency_hint is None
+
+
 # ---------------------------------------------------------------------------
 # Existing (back-compat) tests — kept passing.
 # ---------------------------------------------------------------------------

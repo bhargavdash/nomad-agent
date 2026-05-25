@@ -52,6 +52,7 @@ from app.agents.google_blog import run_google_blog_agent  # noqa: E402
 from app.agents.reddit import run_reddit_agent  # noqa: E402
 from app.agents.synthesizer import run_synthesizer  # noqa: E402
 from app.agents.youtube_shorts import run_youtube_agent  # noqa: E402
+from app.geo import build_geo_brief  # noqa: E402
 from app.schemas import ResearchDiscovery, TripParams  # noqa: E402
 from app.signals import enrich_anchor_hints, enrich_signals_with_llm, extract_signals  # noqa: E402
 
@@ -212,8 +213,15 @@ async def run_pipeline_sequential(trip: TripParams) -> dict:
         file=sys.stderr,
     )
 
+    _banner("Stage 5.5 — Geo brief (city circuit + distances + sun times)")
+    geo_brief = await build_geo_brief(trip, signals)
+    if geo_brief.is_empty():
+        print("Geo brief: (empty — geocoding unavailable, synth falls back)", file=sys.stderr)
+    else:
+        print(geo_brief.to_prompt_block(), file=sys.stderr)
+
     _banner("Stage 6 — Synthesizer (LLM call)")
-    itinerary = await run_synthesizer(trip, signals, all_discoveries)
+    itinerary = await run_synthesizer(trip, signals, all_discoveries, geo_brief)
     print(
         f"Days       : {len(itinerary.days)}\n"
         f"Total stops: {sum(len(d.stops) for d in itinerary.days)}\n"

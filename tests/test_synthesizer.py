@@ -1062,6 +1062,33 @@ def test_llm_draft_maps_trip_level_fields() -> None:
     assert not hasattr(itin, "emoji")
 
 
+def test_build_prompt_includes_geo_brief_when_present() -> None:
+    from app.agents.synthesizer import (
+        _build_prompt,
+        _dedupe_for_prompt,
+        _target_stop_counts,
+    )
+    from app.geo import GeoBrief, GeoLeg
+
+    trip = _trip(destination="Rajasthan, India", duration_days=4)
+    signals = extract_signals(trip)
+    cands = _dedupe_for_prompt(
+        [_disc(title=f"Place {i}", source="youtube") for i in range(4)]
+    )
+    counts = _target_stop_counts(trip.duration_days, signals.pace_density)
+    brief = GeoBrief(
+        ordered_cities=["Jaipur", "Jodhpur"],
+        legs=[GeoLeg("Jaipur", "Jodhpur", 337, "~6h45m")],
+        sun={"Jaipur": ("7:13", "17:40")},
+    )
+    _system, user = _build_prompt(trip, signals, cands, counts, brief)
+    assert "Geography (verified" in user
+    assert "337 km" in user
+    # No geo block when brief is empty/None.
+    _system2, user2 = _build_prompt(trip, signals, cands, counts, None)
+    assert "Geography (verified" not in user2
+
+
 def test_llm_draft_coerces_stay_by_city_list_form() -> None:
     # Small models sometimes emit stay_by_city as a list of objects.
     draft = _LLMItineraryDraft.model_validate(

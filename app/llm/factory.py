@@ -32,6 +32,10 @@ def _resolve_role(role: str) -> tuple[str, str]:
             settings.LLM_SIGNALS_CLASSIFIER_PROVIDER,
             settings.LLM_SIGNALS_CLASSIFIER_MODEL,
         ),
+        "geo_planner": (
+            settings.LLM_GEO_PLANNER_PROVIDER,
+            settings.LLM_GEO_PLANNER_MODEL,
+        ),
     }
     if role not in mapping:
         raise ValueError(

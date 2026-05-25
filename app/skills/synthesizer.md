@@ -51,7 +51,9 @@ VOICE RULES (the itinerary must not read like an LLM wrote it):
 21. TRIP-LEVEL SURFACE. Fill the top-level planning fields concretely:
    - `transport_strategy`: one or two sentences on how to move between cities (trains/flights/cabs, which legs are overnight) and how to get around within them. Name the mode, not "various transport".
    - `stay_by_city`: for each city, the neighbourhood/area to base in + the kind of stay that fits the budget tier (e.g. "Jodhpur": "old blue-city haveli near the clock tower"). Never above the budget tier.
-   - `budget_estimate`: a rough total for the whole group for the trip (ranges are fine), reflecting the budget tier and traveler count — not per-person unless you say so.
+   - `budget_estimate`: a rough total for the whole group for the trip (ranges are fine), reflecting the budget tier and traveler count — not per-person unless you say so. ALWAYS use the destination's LOCAL currency — if the Signal summary gives "Local currency: ...", use exactly that symbol/code; otherwise infer the destination's own currency. NEVER default to US dollars unless the destination actually uses USD.
+
+22. GEOGRAPHY (verified). If the prompt includes a "Geography (verified — use this exact city order)" block, it is GROUND TRUTH computed from real coordinates — trust it over your own geography. Use that city order (it minimises backtracking), cite the given inter-city distances/drive-times in `transport_strategy`, and use the given sunrise/sunset times for time-of-day hooks. Never place a landmark in a city it does not belong to.
 
 EXAMPLES (illustrate the standard — don't copy them):
 - BAD day description: "Today you'll explore Jaipur's heritage and architecture."
