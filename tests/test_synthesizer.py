@@ -886,3 +886,61 @@ def test_synth_prompt_says_target_is_upper_bound() -> None:
     assert "do not invent filler" in lowered or "do not pad" in lowered or (
         "never pad" in lowered
     )
+
+
+# ---------------------------------------------------------------------------
+# WS1 — personalization wiring (preferences / source weights / modifiers)
+# ---------------------------------------------------------------------------
+
+
+def test_build_prompt_includes_traveler_preferences() -> None:
+    """trip_params.preferences (the user's free-text) MUST reach the prompt.
+
+    Guards the WS1 fix for the defect where `preferences` was collected but
+    never passed to any agent or the synthesizer.
+    """
+    from app.agents.synthesizer import (
+        _build_prompt,
+        _dedupe_for_prompt,
+        _target_stop_counts,
+    )
+
+    trip = _trip(
+        preferences="we love local markets and street food, avoid touristy buffets"
+    )
+    signals = extract_signals(trip)
+    cands = _dedupe_for_prompt(
+        [_disc(title=f"Place {i}", source="youtube") for i in range(4)]
+    )
+    counts = _target_stop_counts(trip.duration_days, signals.pace_density)
+    _system, user = _build_prompt(trip, signals, cands, counts)
+    assert "local markets and street food" in user
+    assert "HIGHEST PRIORITY" in user
+
+
+def test_build_prompt_omits_preferences_block_when_empty() -> None:
+    from app.agents.synthesizer import (
+        _build_prompt,
+        _dedupe_for_prompt,
+        _target_stop_counts,
+    )
+
+    trip = _trip(preferences=None)
+    signals = extract_signals(trip)
+    cands = _dedupe_for_prompt(
+        [_disc(title=f"Place {i}", source="youtube") for i in range(4)]
+    )
+    counts = _target_stop_counts(trip.duration_days, signals.pace_density)
+    _system, user = _build_prompt(trip, signals, cands, counts)
+    assert "HIGHEST PRIORITY" not in user
+
+
+def test_signal_summary_surfaces_source_weights() -> None:
+    """vibe_source_weights MUST surface in the signal summary (WS1)."""
+    from app.agents.synthesizer import _format_signal_summary
+
+    trip = _trip(vibes=["budget", "backpacking"])  # reddit-leaning weights
+    signals = extract_signals(trip)
+    summary = _format_signal_summary(signals)
+    assert "Source emphasis" in summary
+    assert "reddit" in summary

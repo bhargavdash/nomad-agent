@@ -167,6 +167,27 @@ _VAGUE_INSIGHT_RE = re.compile(
 
 MIN_INSIGHT_LENGTH = 40
 
+# Irrelevant / non-actionable negativity. Reddit threads about a destination are
+# full of health-anxiety, political grievances, and generic country-bashing that
+# are NOT itinerary-actionable — the "you might get kidney stones" / "so much
+# corruption" class flagged in the Rajasthan benchmark (it leaked into Day 1).
+# Kept high-precision so genuine, actionable warnings survive: a NAMED scam at a
+# NAMED place, snow closures, monsoon flooding, etc. don't match these tokens.
+_IRRELEVANT_NEGATIVITY_RE = re.compile(
+    r"\bkidney\s+stones?\b"
+    r"|\bcorrupt(?:ion)?\b"
+    r"|\bbribe(?:s|ry)?\b"
+    r"|\bdelhi\s+belly\b"
+    r"|\btravell?er'?s?\s+diarr?h?oea\b"
+    r"|\byou'?ll?\s+get\s+sick\b"
+    r"|\bso\s+(?:dirty|filthy)\b"
+    r"|\b(?:poverty|beggars?|slums?)\b"
+    r"|\bthird[-\s]world\b"
+    r"|\b(?:modi|bjp|congress\s+party|hindu[-\s]muslim|communal|riots?)\b"
+    r"|\bscams?\s+everywhere\b",
+    re.IGNORECASE,
+)
+
 
 # ---------------------------------------------------------------------------
 # LLM output schema
@@ -507,7 +528,13 @@ WHAT COUNTS AS AN INSIGHT (lenient within destination scope — extract liberall
 - Any specific place / road / neighborhood / hostel / dish / cafe / route mentioned with even a sentence of context.
 - Any practical advice with a number, date, or named thing (price, route, season, transport mode).
 - Any "skip X / go Y" contrarian recommendation.
-- Any warning about scams, weather, road conditions, illness, theft, etc.
+- Any actionable warning tied to a named place (a named scam, a specific road that floods, a fort that closes early).
+
+DO NOT EXTRACT (these are noise, not itinerary tips — auto-rejected downstream):
+- Health scares / illness anxiety: "you might get kidney stones", "you'll get sick", "Delhi belly", disease panic. (A specific actionable tip tied to a place — "carry bottled water for the Kuldhara day-trip" — is fine.)
+- Political / social grievances: corruption, bribes, politics, communal tension, "it's so dirty", poverty, begging.
+- Generic safety paranoia not tied to a named place ("is it even safe?", "scams everywhere"). A NAMED scam at a NAMED place ("tuk-tuk overcharge at the Hawa Mahal gate") IS valid.
+- Advice about a DIFFERENT season than this trip. The trip's season and dates are in the user message — IGNORE tips that only apply to other seasons (e.g. summer-heat or monsoon-flooding advice for a December/winter trip).
 
 `topic`: a SHORT label naming the specific thing — a proper noun or named situation. Examples:
   GOOD:  "Manali-Leh highway in July", "Old Manali cafés", "Solang Valley paragliding scams",
@@ -630,6 +657,16 @@ def _validate_and_dedupe(
             logger.info(
                 "reddit.validate.drop reason=vague phrase=%r topic=%r",
                 vmatch.group(0), ins.topic,
+            )
+            continue
+        # Drop non-actionable negativity (health scares, corruption, politics,
+        # generic country-bashing). Checks topic + body so "kidney stones in
+        # Rajasthan" is dropped whether the phrase lands in the title or body.
+        nmatch = _IRRELEVANT_NEGATIVITY_RE.search(f"{ins.topic} {body}")
+        if nmatch:
+            logger.info(
+                "reddit.validate.drop reason=irrelevant_negativity phrase=%r topic=%r",
+                nmatch.group(0), ins.topic,
             )
             continue
         valid_indices = [i for i in ins.evidence_post_indices if 1 <= i <= n_posts]

@@ -41,7 +41,7 @@ from typing import Any, Literal
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from app.llm.factory import get_llm
+from app.llm.factory import get_structured_llm
 from app.schemas import (
     AIDay,
     AIItinerary,
@@ -395,6 +395,22 @@ def _format_signal_summary(signals: TravelSignals) -> str:
     ]
     if signals.active_festivals:
         parts.append(f"Active festivals: {', '.join(signals.active_festivals)}")
+    if signals.vibe_source_weights:
+        weights_str = ", ".join(
+            f"{src} {weight:.0%}"
+            for src, weight in sorted(
+                signals.vibe_source_weights.items(),
+                key=lambda kv: kv[1],
+                reverse=True,
+            )
+        )
+        parts.append(
+            f"Source emphasis (derived from vibes): {weights_str} — when two "
+            "candidates compete for the same slot, prefer the one from the "
+            "higher-weighted source."
+        )
+    if signals.query_modifiers:
+        parts.append("Interest keywords: " + ", ".join(signals.query_modifiers[:12]))
     if signals.warnings:
         parts.append("Warnings: " + " | ".join(signals.warnings))
     return "\n".join(parts)
@@ -422,6 +438,17 @@ def _build_prompt(
         f"Pace: {trip_params.pace} → aim for ~{target_per_day} stops/day, "
         "emit fewer if the research is thin.\n"
     )
+    # The traveler's free-text request is the single most direct expression of
+    # intent. It MUST win over generic vibe inference when the two conflict.
+    prefs = (trip_params.preferences or "").strip()
+    prefs_block = (
+        "\n=== Traveler's own words (HIGHEST PRIORITY) ===\n"
+        f"{prefs}\n"
+        "Honor these explicitly. When they conflict with the generic vibe list "
+        "or with a research candidate, the traveler's own words win.\n"
+        if prefs
+        else ""
+    )
     user = (
         f"Destination: {trip_params.destination}\n"
         f"Trip dates: {trip_params.date_from} → {trip_params.date_to}\n"
@@ -434,6 +461,7 @@ def _build_prompt(
         f"Pace: {trip_params.pace}\n"
         f"Vibes: {vibes_str}\n"
         f"Accommodation: {trip_params.accommodation}\n"
+        f"{prefs_block}"
         f"\n{voice_cues}"
         f"\n=== Signal summary ===\n{_format_signal_summary(signals)}\n"
         f"\n=== Research candidates ({len(candidates)}) ===\n"
@@ -469,13 +497,11 @@ async def _extract_via_llm(
     """Single LLM call. Returns None on error so caller can retry or fall back."""
     system, user = _build_prompt(trip_params, signals, candidates, target_counts)
     try:
-        llm = get_llm("synthesizer")
-        try:
-            structured = llm.with_structured_output(
-                _LLMItineraryDraft, method="json_mode"
-            )
-        except Exception:  # noqa: BLE001
-            structured = llm.with_structured_output(_LLMItineraryDraft)
+        # Cerebras-235B primary with Groq-70B fallback (see factory). Structured
+        # output + provider fallback are composed in get_structured_llm.
+        structured = get_structured_llm(
+            "synthesizer", _LLMItineraryDraft, method="json_mode"
+        )
         messages: list[Any] = [
             SystemMessage(content=system),
             HumanMessage(content=user),
