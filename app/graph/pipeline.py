@@ -209,7 +209,7 @@ async def merge_node(state: PipelineState) -> dict[str, Any]:
                     id=str(uuid.uuid4()),
                     title=name,
                     body=(
-                        f"{name} — a must-visit landmark in {destination}. "
+                        f"{name} — a well-known landmark in {destination}. "
                         "Pre-validated anchor stop. Check local advisories for opening hours."
                     ),
                     source="maps",

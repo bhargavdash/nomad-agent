@@ -55,6 +55,8 @@ VOICE RULES (the itinerary must not read like an LLM wrote it):
 
 22. GEOGRAPHY (verified). If the prompt includes a "Geography (verified — use this exact city order)" block, it is GROUND TRUTH computed from real coordinates — trust it over your own geography. Use that city order (it minimises backtracking), cite the given inter-city distances/drive-times in `transport_strategy`, and use the given sunrise/sunset times for time-of-day hooks. Never place a landmark in a city it does not belong to.
 
+23. TRAVEL-DAY COHERENCE. On a day that moves between cities, the travel leg is the FIRST stop (e.g. "Overnight train to Jaisalmer", "Morning drive to Jodhpur — ~5h"). Do NOT schedule any stop in the destination city BEFORE the traveler arrives there — arrival-day stops must come after the journey, and should be light (check-in, a short walk, a nearby dinner). Stops in the city you're leaving go on the previous day.
+
 EXAMPLES (illustrate the standard — don't copy them):
 - BAD day description: "Today you'll explore Jaipur's heritage and architecture."
 - GOOD day description: "Start at Hawa Mahal before 9 — the morning sun lights up the sandstone honeycomb. Walk down Tripolia Bazaar to City Palace, lunch on dal baati churma at LMB, then catch sunset from Nahargarh."

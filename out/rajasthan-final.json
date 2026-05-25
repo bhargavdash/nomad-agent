@@ -1,0 +1,572 @@
+{
+  "stats_places": 0,
+  "stats_tips": 0,
+  "stats_photo_stops": 0,
+  "route_summary": "Rajasthan, India",
+  "transport_strategy": null,
+  "seasonal_tips": [
+    "Peak season — book trains, hotels, and marquee experiences well ahead.",
+    "Nights get cold this time of year — pack layers/thermals, especially in desert or hill areas."
+  ],
+  "stay_by_city": {},
+  "budget_estimate": null,
+  "discoveries": [
+    {
+      "id": "maps-anchor-a086f423-7095-492d-b3d5-0c1af6c6b8d8",
+      "title": "Standard anchor #1",
+      "body": "Planner-suggested anchor (no agent surfaced enough material).",
+      "tags": [
+        "maps"
+      ],
+      "source": "maps"
+    },
+    {
+      "id": "maps-anchor-39c00cd9-9f20-491a-b429-8e3ee1c60a36",
+      "title": "Standard anchor #2",
+      "body": "Planner-suggested anchor (no agent surfaced enough material).",
+      "tags": [
+        "maps"
+      ],
+      "source": "maps"
+    },
+    {
+      "id": "maps-anchor-e880e0ba-f49b-4030-bc09-71d3d19bddf7",
+      "title": "Standard anchor #3",
+      "body": "Planner-suggested anchor (no agent surfaced enough material).",
+      "tags": [
+        "maps"
+      ],
+      "source": "maps"
+    }
+  ],
+  "days": [
+    {
+      "dayNumber": 1,
+      "city": "Rajasthan, India",
+      "title": "Day 1 — Rajasthan, India",
+      "description": "Skeleton plan generated from research candidates; synthesizer LLM was unavailable or input was thin.",
+      "highlights": [
+        "Morning coffee in Rajasthan, India",
+        "Old Rajasthan, India market walk"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "9:00",
+          "ampm": "AM",
+          "duration": "1h",
+          "name": "Morning coffee in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "☕"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "11:00",
+          "ampm": "AM",
+          "duration": "2h",
+          "name": "Old Rajasthan, India market walk",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🛍️"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "1:00",
+          "ampm": "PM",
+          "duration": "1h30m",
+          "name": "Lunch in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🍽️"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 2,
+      "city": "Rajasthan, India",
+      "title": "Day 2 — Rajasthan, India",
+      "description": "Skeleton plan generated from research candidates; synthesizer LLM was unavailable or input was thin.",
+      "highlights": [
+        "Morning coffee in Rajasthan, India",
+        "Old Rajasthan, India market walk"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "9:00",
+          "ampm": "AM",
+          "duration": "1h",
+          "name": "Morning coffee in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "☕"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "11:00",
+          "ampm": "AM",
+          "duration": "2h",
+          "name": "Old Rajasthan, India market walk",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🛍️"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "1:00",
+          "ampm": "PM",
+          "duration": "1h30m",
+          "name": "Lunch in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🍽️"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 3,
+      "city": "Rajasthan, India",
+      "title": "Day 3 — Rajasthan, India",
+      "description": "Skeleton plan generated from research candidates; synthesizer LLM was unavailable or input was thin.",
+      "highlights": [
+        "Morning coffee in Rajasthan, India",
+        "Old Rajasthan, India market walk"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "9:00",
+          "ampm": "AM",
+          "duration": "1h",
+          "name": "Morning coffee in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "☕"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "11:00",
+          "ampm": "AM",
+          "duration": "2h",
+          "name": "Old Rajasthan, India market walk",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🛍️"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "1:00",
+          "ampm": "PM",
+          "duration": "1h30m",
+          "name": "Lunch in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🍽️"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 4,
+      "city": "Rajasthan, India",
+      "title": "Day 4 — Rajasthan, India",
+      "description": "Skeleton plan generated from research candidates; synthesizer LLM was unavailable or input was thin.",
+      "highlights": [
+        "Morning coffee in Rajasthan, India",
+        "Old Rajasthan, India market walk"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "9:00",
+          "ampm": "AM",
+          "duration": "1h",
+          "name": "Morning coffee in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "☕"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "11:00",
+          "ampm": "AM",
+          "duration": "2h",
+          "name": "Old Rajasthan, India market walk",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🛍️"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "1:00",
+          "ampm": "PM",
+          "duration": "1h30m",
+          "name": "Lunch in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🍽️"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 5,
+      "city": "Rajasthan, India",
+      "title": "Day 5 — Rajasthan, India",
+      "description": "Skeleton plan generated from research candidates; synthesizer LLM was unavailable or input was thin.",
+      "highlights": [
+        "Morning coffee in Rajasthan, India",
+        "Old Rajasthan, India market walk"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "9:00",
+          "ampm": "AM",
+          "duration": "1h",
+          "name": "Morning coffee in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "☕"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "11:00",
+          "ampm": "AM",
+          "duration": "2h",
+          "name": "Old Rajasthan, India market walk",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🛍️"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "1:00",
+          "ampm": "PM",
+          "duration": "1h30m",
+          "name": "Lunch in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🍽️"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 6,
+      "city": "Rajasthan, India",
+      "title": "Day 6 — Rajasthan, India",
+      "description": "Skeleton plan generated from research candidates; synthesizer LLM was unavailable or input was thin.",
+      "highlights": [
+        "Morning coffee in Rajasthan, India",
+        "Old Rajasthan, India market walk"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "9:00",
+          "ampm": "AM",
+          "duration": "1h",
+          "name": "Morning coffee in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "☕"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "11:00",
+          "ampm": "AM",
+          "duration": "2h",
+          "name": "Old Rajasthan, India market walk",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🛍️"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "1:00",
+          "ampm": "PM",
+          "duration": "1h30m",
+          "name": "Lunch in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🍽️"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 7,
+      "city": "Rajasthan, India",
+      "title": "Day 7 — Rajasthan, India",
+      "description": "Skeleton plan generated from research candidates; synthesizer LLM was unavailable or input was thin.",
+      "highlights": [
+        "Morning coffee in Rajasthan, India",
+        "Old Rajasthan, India market walk"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "9:00",
+          "ampm": "AM",
+          "duration": "1h",
+          "name": "Morning coffee in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "☕"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "11:00",
+          "ampm": "AM",
+          "duration": "2h",
+          "name": "Old Rajasthan, India market walk",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🛍️"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "1:00",
+          "ampm": "PM",
+          "duration": "1h30m",
+          "name": "Lunch in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🍽️"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 8,
+      "city": "Rajasthan, India",
+      "title": "Day 8 — Rajasthan, India",
+      "description": "Skeleton plan generated from research candidates; synthesizer LLM was unavailable or input was thin.",
+      "highlights": [
+        "Morning coffee in Rajasthan, India",
+        "Old Rajasthan, India market walk"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "9:00",
+          "ampm": "AM",
+          "duration": "1h",
+          "name": "Morning coffee in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "☕"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "11:00",
+          "ampm": "AM",
+          "duration": "2h",
+          "name": "Old Rajasthan, India market walk",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🛍️"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "1:00",
+          "ampm": "PM",
+          "duration": "1h30m",
+          "name": "Lunch in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🍽️"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 9,
+      "city": "Rajasthan, India",
+      "title": "Day 9 — Rajasthan, India",
+      "description": "Skeleton plan generated from research candidates; synthesizer LLM was unavailable or input was thin.",
+      "highlights": [
+        "Morning coffee in Rajasthan, India",
+        "Old Rajasthan, India market walk"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "9:00",
+          "ampm": "AM",
+          "duration": "1h",
+          "name": "Morning coffee in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "☕"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "11:00",
+          "ampm": "AM",
+          "duration": "2h",
+          "name": "Old Rajasthan, India market walk",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🛍️"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "1:00",
+          "ampm": "PM",
+          "duration": "1h30m",
+          "name": "Lunch in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🍽️"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 10,
+      "city": "Rajasthan, India",
+      "title": "Day 10 — Rajasthan, India",
+      "description": "Skeleton plan generated from research candidates; synthesizer LLM was unavailable or input was thin.",
+      "highlights": [
+        "Morning coffee in Rajasthan, India",
+        "Old Rajasthan, India market walk"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "9:00",
+          "ampm": "AM",
+          "duration": "1h",
+          "name": "Morning coffee in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "☕"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "11:00",
+          "ampm": "AM",
+          "duration": "2h",
+          "name": "Old Rajasthan, India market walk",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🛍️"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "1:00",
+          "ampm": "PM",
+          "duration": "1h30m",
+          "name": "Lunch in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🍽️"
+          ]
+        }
+      ]
+    },
+    {
+      "dayNumber": 11,
+      "city": "Rajasthan, India",
+      "title": "Day 11 — Rajasthan, India",
+      "description": "Skeleton plan generated from research candidates; synthesizer LLM was unavailable or input was thin.",
+      "highlights": [
+        "Morning coffee in Rajasthan, India",
+        "Old Rajasthan, India market walk"
+      ],
+      "stops": [
+        {
+          "sortOrder": 1,
+          "time": "9:00",
+          "ampm": "AM",
+          "duration": "1h",
+          "name": "Morning coffee in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "☕"
+          ]
+        },
+        {
+          "sortOrder": 2,
+          "time": "11:00",
+          "ampm": "AM",
+          "duration": "2h",
+          "name": "Old Rajasthan, India market walk",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🛍️"
+          ]
+        },
+        {
+          "sortOrder": 3,
+          "time": "1:00",
+          "ampm": "PM",
+          "duration": "1h30m",
+          "name": "Lunch in Rajasthan, India",
+          "description": "Anchor slot suggested by the planner — swap for a specific spot in Rajasthan, India you've already saved.",
+          "source": "maps",
+          "tags": [
+            "🍽️"
+          ]
+        }
+      ]
+    }
+  ]
+}

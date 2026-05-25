@@ -93,6 +93,40 @@ _PHOTO_TAG_TOKENS = {
     "scenic", "vista", "lookout", "instagram",
 }
 
+# Filler-stop detection (honest stats). A stop counts as a real "place"
+# regardless of its source — so a real, LLM-named maps anchor ("Amber Fort",
+# "Ambrai") IS a place — UNLESS it's planner padding or a generic use-case
+# label. Two signals: the planner-placeholder description sentinel (from
+# `_default_anchor_stop`), and the generic banned-label names (rule 14) the LLM
+# occasionally emits anyway. This replaces the old `source == "maps"` proxy,
+# which wrongly discarded real anchors and undercounted the stats badges.
+_PLANNER_PLACEHOLDER_MARK = "suggested by the planner"
+_FILLER_NAME_PREFIXES = (
+    "morning coffee in ", "lunch in ", "dinner in ", "breakfast in ", "brunch in ",
+    "sunset point near ", "evening walk through ",
+)
+_FILLER_NAME_EXACT = {
+    "cultural anchor", "cultural exploration", "cultural spot", "cultural place",
+    "standard anchor", "anchor slot", "local eatery", "local breakfast spot",
+    "local market", "local food", "local cuisine", "neighborhood walk",
+    "neighbourhood walk", "pool time", "relaxation time", "free time",
+    "sunset viewpoint", "evening stroll", "dinner spot", "lunch spot",
+    "breakfast spot",
+}
+_FILLER_OLD_MARKET_RE = re.compile(r"^old\s+.+\s+market walk\s*$", re.IGNORECASE)
+
+
+def _is_filler_stop(stop: AIStop) -> bool:
+    """True for planner padding / generic use-case labels — excluded from stats."""
+    if _PLANNER_PLACEHOLDER_MARK in (stop.description or "").lower():
+        return True
+    name = " ".join(stop.name.lower().split())
+    if name in _FILLER_NAME_EXACT:
+        return True
+    if any(name.startswith(p) for p in _FILLER_NAME_PREFIXES):
+        return True
+    return bool(_FILLER_OLD_MARKET_RE.match(name))
+
 
 # ---------------------------------------------------------------------------
 # Title normalisation + cross-source dedup
@@ -917,23 +951,22 @@ def _compute_stats(
 ) -> tuple[int, int, int]:
     """(stats_places, stats_tips, stats_photo_stops).
 
-    Honest counts (BENCHMARK §6 P1/P2 fix):
-    - places: unique stops whose source != "maps". Don't count generic anchors
-      like "Cultural anchor" / "Local breakfast spot" — they're filler, not
-      places the user actually researched.
+    Honest, filler-aware counts:
+    - places: unique real named stops — counts genuine anchors regardless of
+      source (a real "Amber Fort" with source="maps" IS a place), but excludes
+      planner padding + generic use-case labels (see `_is_filler_stop`). This
+      fixes the undercount where real LLM-named maps anchors weren't counted.
     - tips: discoveries with a tip/warning/recommendation tag whose title is
-      referenced by at least one stop. Drops the "5 tips badge but 0 tips in
-      itinerary" lie from the BENCHMARK run.
-    - photo_stops: stops whose source is youtube OR whose tags include a
-      photo/view token. Counts only non-maps stops too (maps anchors can't
-      be photo discoveries).
+      referenced by at least one real (non-filler) stop.
+    - photo_stops: real (non-filler) stops whose source is youtube OR whose tags
+      include a photo/view token.
     """
     unique_named: set[str] = set()
     referenced_titles: set[str] = set()
     photo = 0
     for day in days:
         for stop in day.stops:
-            if stop.source == "maps":
+            if _is_filler_stop(stop):
                 continue
             unique_named.add(stop.name.lower())
             referenced_titles.add(stop.name.lower())

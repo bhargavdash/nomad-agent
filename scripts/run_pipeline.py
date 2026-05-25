@@ -202,7 +202,7 @@ async def run_pipeline_sequential(trip: TripParams) -> dict:
                         id=str(uuid.uuid4()),
                         title=name,
                         body=(
-                            f"{name} — a must-visit landmark in {trip.destination}. "
+                            f"{name} — a well-known landmark in {trip.destination}. "
                             "Pre-validated anchor stop. Check local advisories for opening hours."
                         ),
                         source="maps",

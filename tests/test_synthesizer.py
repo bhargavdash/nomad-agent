@@ -284,6 +284,21 @@ def test_compute_stats_tips_only_counts_tips_used_as_stops() -> None:
     assert tips == 2  # only the two tips that surface as stops
 
 
+def test_compute_stats_counts_real_maps_anchors_excludes_filler() -> None:
+    # Honest filler-aware count: a real LLM-named maps anchor IS a place; planner
+    # padding (description sentinel) and generic labels are not.
+    from app.agents.synthesizer import _compute_stats, _default_anchor_stop
+
+    day = _build_day([
+        _stop(sort_order=1, name="Amber Fort", source="maps"),       # real anchor
+        _stop(sort_order=2, name="Mehrangarh Fort", source="maps"),  # real anchor
+        _default_anchor_stop(3, 2, "Jaipur"),                        # planner padding
+        _stop(sort_order=4, name="Cultural anchor", source="maps"),  # generic label
+    ])
+    places, _, _ = _compute_stats([day], discoveries=[])
+    assert places == 2  # two real forts; padding + "Cultural anchor" excluded
+
+
 def test_compute_stats_photo_stops_ignores_maps_stops() -> None:
     day = _build_day([
         _stop(sort_order=1, name="A", source="youtube", tags=["☕"]),
