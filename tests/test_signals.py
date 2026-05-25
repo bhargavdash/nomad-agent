@@ -34,6 +34,37 @@ def _trip(**overrides) -> TripParams:
 
 
 # ---------------------------------------------------------------------------
+# Seasonal tips (Tier 1) — deterministic practical tips, not hazards.
+# ---------------------------------------------------------------------------
+
+
+def test_seasonal_tips_rajasthan_december() -> None:
+    # Peak winter trip → "book ahead" + "cold nights / layers".
+    trip = _trip(
+        destination="Rajasthan, India",
+        date_from="2026-12-20",
+        date_to="2026-12-31",
+        vibes=["heritage"],
+    )
+    sig = extract_signals(trip)
+    joined = " ".join(sig.seasonal_tips).lower()
+    assert sig.seasonal_tips, "expected seasonal tips for a Dec Rajasthan trip"
+    assert "book" in joined and ("cold" in joined or "layers" in joined)
+
+
+def test_seasonal_tips_empty_for_temperate_shoulder() -> None:
+    # Europe shoulder season → no peak/cold/monsoon/heat tip fires.
+    trip = _trip(
+        destination="Paris, France",
+        date_from="2026-04-10",
+        date_to="2026-04-17",
+        vibes=["art"],
+    )
+    sig = extract_signals(trip)
+    assert sig.seasonal_tips == []
+
+
+# ---------------------------------------------------------------------------
 # Existing (back-compat) tests — kept passing.
 # ---------------------------------------------------------------------------
 

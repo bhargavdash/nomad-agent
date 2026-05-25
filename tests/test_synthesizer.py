@@ -944,3 +944,73 @@ def test_signal_summary_surfaces_source_weights() -> None:
     summary = _format_signal_summary(signals)
     assert "Source emphasis" in summary
     assert "reddit" in summary
+
+
+# ---------------------------------------------------------------------------
+# Tier 1 — signals-driven skill overlays + circuit/content prompt
+# ---------------------------------------------------------------------------
+
+
+def test_select_overlays_rajasthan_food_trip() -> None:
+    from app.agents.synthesizer import _select_overlays
+
+    trip = _trip(
+        destination="Rajasthan, India",
+        duration_days=10,
+        vibes=["heritage", "local cuisine"],
+        preferences="markets for shopping; prefer dhabas and thalis",
+    )
+    signals = extract_signals(trip)
+    overlays = _select_overlays(trip, signals)
+    assert "regions/india" in overlays
+    assert "trip_shapes/region_multi_city" in overlays
+    assert "vibes/food_and_markets" in overlays
+
+
+def test_select_overlays_single_city_non_food() -> None:
+    from app.agents.synthesizer import _select_overlays
+
+    trip = _trip(
+        destination="Paris, France",
+        duration_days=4,
+        vibes=["art", "architecture"],
+        preferences=None,
+    )
+    signals = extract_signals(trip)
+    overlays = _select_overlays(trip, signals)
+    # Not India, not a multi-city region keyword, no food/shopping vibe.
+    assert overlays == []
+
+
+def test_build_prompt_appends_selected_overlays() -> None:
+    from app.agents.synthesizer import (
+        _build_prompt,
+        _dedupe_for_prompt,
+        _target_stop_counts,
+    )
+
+    trip = _trip(
+        destination="Rajasthan, India",
+        duration_days=10,
+        vibes=["heritage", "local cuisine"],
+    )
+    signals = extract_signals(trip)
+    cands = _dedupe_for_prompt(
+        [_disc(title=f"Place {i}", source="youtube") for i in range(4)]
+    )
+    counts = _target_stop_counts(trip.duration_days, signals.pace_density)
+    system, _user = _build_prompt(trip, signals, cands, counts)
+    # Overlay text composed in, AND base prompt format fields resolved.
+    assert "Multi-city circuit" in system
+    assert "India playbook" in system
+    assert "{min_stops}" not in system  # base .format() ran
+
+
+def test_synth_prompt_has_route_and_content_rules() -> None:
+    """Prompt-contract guards for the Tier 1 additions."""
+    from app.agents.synthesizer import _SYNTH_SYSTEM
+
+    lowered = _SYNTH_SYSTEM.lower()
+    assert "route_summary" in lowered
+    assert "plan first" in lowered
+    assert "highlights" in lowered

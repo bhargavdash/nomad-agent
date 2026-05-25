@@ -227,6 +227,9 @@ class _LLMDay(BaseModel):
 
 class _LLMItineraryDraft(BaseModel):
     emoji: str = Field(default="🧭")
+    # Circuit / day-arc plan the model commits to before writing days. Internal
+    # for now (forces route reasoning); promoted to the wire schema in Tier 2.
+    route_summary: str = Field(default="")
     days: list[_LLMDay] = Field(default_factory=list)
 
 
@@ -236,6 +239,42 @@ class _LLMItineraryDraft(BaseModel):
 
 
 _SYNTH_SYSTEM = load_skill("synthesizer")
+
+
+# --- Signals-driven skill overlays -----------------------------------------
+# Deterministic signals (region, trip shape, vibes) pick which domain-playbook
+# markdown gets appended to the base synthesizer prompt. This is the pragmatic
+# "skills" model for a deterministic pipeline: the *signals* choose the skill,
+# not an autonomous agent loop. Each overlay is a file under app/skills/.
+
+# Region/state substrings that imply a multi-city circuit (not a single city).
+_MULTI_CITY_REGION_KEYWORDS = (
+    "rajasthan", "kerala", "himachal", "uttarakhand", "karnataka",
+    "tamil nadu", "tamilnadu", "gujarat", "north india", "south india",
+    "golden triangle", "north east", "northeast", "ladakh",
+)
+# Tokens (matched as substrings against vibes + preferences) that flag a
+# food/shopping-forward trip.
+_FOOD_SHOP_TOKENS = (
+    "food", "foodie", "cuisine", "culinary", "street food",
+    "shopping", "market", "bazaar",
+)
+
+
+def _select_overlays(trip_params: TripParams, signals: TravelSignals) -> list[str]:
+    """Pick skill-overlay names to append to the synthesizer prompt, by signal."""
+    overlays: list[str] = []
+    dest = trip_params.destination.lower()
+    if signals.region == "india":
+        overlays.append("regions/india")
+    if trip_params.duration_days >= 4 and any(
+        kw in dest for kw in _MULTI_CITY_REGION_KEYWORDS
+    ):
+        overlays.append("trip_shapes/region_multi_city")
+    haystack = (" ".join(trip_params.vibes) + " " + (trip_params.preferences or "")).lower()
+    if any(tok in haystack for tok in _FOOD_SHOP_TOKENS):
+        overlays.append("vibes/food_and_markets")
+    return overlays
 
 
 def _format_candidates(cands: list[_PlaceCandidate]) -> str:
@@ -282,6 +321,8 @@ def _format_signal_summary(signals: TravelSignals) -> str:
         parts.append("Interest keywords: " + ", ".join(signals.query_modifiers[:12]))
     if signals.warnings:
         parts.append("Warnings: " + " | ".join(signals.warnings))
+    if signals.seasonal_tips:
+        parts.append("Seasonal tips: " + " | ".join(signals.seasonal_tips))
     return "\n".join(parts)
 
 
@@ -296,6 +337,12 @@ def _build_prompt(
     system = _SYNTH_SYSTEM.format(
         min_stops=MIN_STOPS_PER_DAY, max_stops=MAX_STOPS_PER_DAY
     )
+    # Append signals-selected skill overlays (region/trip-shape/vibe playbooks).
+    # Composed AFTER .format() so overlay braces never collide with format fields.
+    overlays = _select_overlays(trip_params, signals)
+    if overlays:
+        system = system + "\n\n" + "\n\n".join(load_skill(name) for name in overlays)
+        logger.info("synthesizer.overlays=%s", overlays)
     vibes_str = ", ".join(trip_params.vibes) if trip_params.vibes else "—"
     voice_cues = (
         "=== Voice cues ===\n"
@@ -384,8 +431,9 @@ async def _extract_via_llm(
         if not isinstance(result, _LLMItineraryDraft):
             result = _LLMItineraryDraft.model_validate(result)
         logger.info(
-            "[LLM] synthesizer → returned  days=%d",
+            "[LLM] synthesizer → returned  days=%d  route=%r",
             len(result.days) if result.days else 0,
+            (result.route_summary or "")[:160],
         )
         return result
     except Exception as e:  # noqa: BLE001
