@@ -316,12 +316,21 @@ _FOOD_SHOP_TOKENS = (
 )
 
 
+# region → region-playbook overlay (only regions we have a playbook for).
+_REGION_OVERLAY = {
+    "india": "regions/india",
+    "europe": "regions/europe",
+    "southeast_asia": "regions/southeast_asia",
+}
+
+
 def _select_overlays(trip_params: TripParams, signals: TravelSignals) -> list[str]:
     """Pick skill-overlay names to append to the synthesizer prompt, by signal."""
     overlays: list[str] = []
     dest = trip_params.destination.lower()
-    if signals.region == "india":
-        overlays.append("regions/india")
+    region_overlay = _REGION_OVERLAY.get(signals.region)
+    if region_overlay:
+        overlays.append(region_overlay)
     if trip_params.duration_days >= 4 and any(
         kw in dest for kw in _MULTI_CITY_REGION_KEYWORDS
     ):

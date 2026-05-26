@@ -332,5 +332,12 @@ async def run_pipeline(trip_params: TripParams) -> PipelineState:
     )
     initial: PipelineState = {"trip_params": trip_params}
     final = await graph.ainvoke(initial)
-    logger.info("run_pipeline.complete  elapsed=%.1fs", time.perf_counter() - t0)
+    itinerary = final.get("itinerary")
+    logger.info(
+        "run_pipeline.complete  elapsed=%.1fs  cache_hit=%s  discoveries=%d  days=%d",
+        time.perf_counter() - t0,
+        final.get("research_cache") is not None,
+        len(final.get("all_discoveries") or []),
+        len(itinerary.days) if itinerary else 0,
+    )
     return final  # type: ignore[return-value]

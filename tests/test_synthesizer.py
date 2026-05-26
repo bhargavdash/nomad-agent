@@ -982,19 +982,16 @@ def test_select_overlays_rajasthan_food_trip() -> None:
     assert "vibes/food_and_markets" in overlays
 
 
-def test_select_overlays_single_city_non_food() -> None:
+def test_select_overlays_europe_and_sea_regions() -> None:
     from app.agents.synthesizer import _select_overlays
 
-    trip = _trip(
-        destination="Paris, France",
-        duration_days=4,
-        vibes=["art", "architecture"],
-        preferences=None,
-    )
-    signals = extract_signals(trip)
-    overlays = _select_overlays(trip, signals)
-    # Not India, not a multi-city region keyword, no food/shopping vibe.
-    assert overlays == []
+    paris = _trip(destination="Paris, France", duration_days=4,
+                  vibes=["art", "architecture"], preferences=None)
+    assert _select_overlays(paris, extract_signals(paris)) == ["regions/europe"]
+
+    bali = _trip(destination="Bali, Indonesia", duration_days=6,
+                 vibes=["beaches", "relaxation"], preferences=None)
+    assert _select_overlays(bali, extract_signals(bali)) == ["regions/southeast_asia"]
 
 
 def test_build_prompt_appends_selected_overlays() -> None:

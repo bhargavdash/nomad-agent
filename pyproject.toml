@@ -24,6 +24,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "tenacity>=9.0",
     "redis>=5",
+    "tzdata>=2026.2",
 ]
 
 [dependency-groups]

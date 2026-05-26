@@ -54,6 +54,7 @@ from app.agents.synthesizer import run_synthesizer  # noqa: E402
 from app.agents.youtube_shorts import run_youtube_agent  # noqa: E402
 from app import cache  # noqa: E402
 from app.geo import build_geo_brief  # noqa: E402
+from app.observability import configure_observability  # noqa: E402
 from app.schemas import ResearchDiscovery, TripParams  # noqa: E402
 from app.signals import enrich_anchor_hints, enrich_signals_with_llm, extract_signals  # noqa: E402
 
@@ -282,6 +283,7 @@ async def run_pipeline_sequential(trip: TripParams) -> dict:
 
 
 async def _amain() -> int:
+    configure_observability()
     arg = sys.argv[1] if len(sys.argv) > 1 else None
     try:
         trip_path = _resolve_trip_path(arg)
