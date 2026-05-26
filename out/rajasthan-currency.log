@@ -1,0 +1,264 @@
+Loading trip from: samples\rajasthan-dec20-31.json
+
+======================================================================
+  Trip: Rajasthan, India  (2026-12-20 → 2026-12-31)
+======================================================================
+Duration  : 11 days
+Travelers : 2
+Vibes     : heritage, desert, local cuisine, photography
+Pace      : Balanced
+Budget    : Medium
+Accommo.  : Heritage Haveli
+
+======================================================================
+  Stage 1 — Signals (pure Python + LLM fallback when region unknown)
+======================================================================
+2026-05-25 20:39:27,677 [INFO] app.llm.factory: [LLM] role=signals_classifier            provider=groq        model=llama-3.3-70b-versatile
+2026-05-25 20:39:28,135 [INFO] app.signals: [LLM] anchor_hints: fetching 5-6 landmarks for dest='Rajasthan, India'
+2026-05-25 20:39:28,796 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-25 20:39:28,806 [INFO] app.signals: signals.anchor_hints dest='Rajasthan, India' anchors=['Hawa Mahal', 'Amer Fort', 'Jantar Mantar', 'City Palace', 'Albert Hall Museum', 'Lake Pichola']
+Region          : india
+Season          : peak
+Crowd level     : peak
+Budget tier     : mid
+Pace density    : 4 stops/day target
+Active festivals: —
+Weather hint    : —
+Query modifiers : ['peak season', 'best weather', 'less crowded', 'local favorites', 'heritage', 'desert', 'local cuisine', 'photography']
+Warnings        : —
+Vibe→source wts : {'youtube': 0.3333333333333333, 'reddit': 0.3333333333333333, 'blog': 0.3333333333333333}
+Top anchors     : ['Hawa Mahal', 'Amer Fort', 'Jantar Mantar', 'City Palace', 'Albert Hall Museum', 'Lake Pichola']
+
+======================================================================
+  Stage 2 — YouTubeShorts agent (sequential)
+======================================================================
+2026-05-25 20:39:28,806 [INFO] app.agents.youtube_shorts: youtube_agent.start queries=['Rajasthan, India travel vlog', 'Rajasthan, India food', 'top things to do in Rajasthan, India', 'Rajasthan, India heritage']
+2026-05-25 20:39:28,806 [INFO] app.tools.youtube: youtube.search query='Rajasthan, India travel vlog' max=15
+2026-05-25 20:39:28,820 [INFO] app.tools.youtube: youtube.search query='Rajasthan, India food' max=15
+2026-05-25 20:39:28,837 [INFO] app.tools.youtube: youtube.search query='top things to do in Rajasthan, India' max=15
+2026-05-25 20:39:28,854 [INFO] app.tools.youtube: youtube.search query='Rajasthan, India heritage' max=15
+2026-05-25 20:39:29,614 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/search?part=id&q=Rajasthan%2C+India+heritage&type=video&videoDuration=short&maxResults=15&order=relevance&safeSearch=moderate&publishedAfter=2024-05-25T15%3A09%3A28Z&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-25 20:39:29,697 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/search?part=id&q=top+things+to+do+in+Rajasthan%2C+India&type=video&videoDuration=short&maxResults=15&order=relevance&safeSearch=moderate&publishedAfter=2024-05-25T15%3A09%3A28Z&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-25 20:39:29,838 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/search?part=id&q=Rajasthan%2C+India+travel+vlog&type=video&videoDuration=short&maxResults=15&order=relevance&safeSearch=moderate&publishedAfter=2024-05-25T15%3A09%3A28Z&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-25 20:39:29,862 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/search?part=id&q=Rajasthan%2C+India+food&type=video&videoDuration=short&maxResults=15&order=relevance&safeSearch=moderate&publishedAfter=2024-05-25T15%3A09%3A28Z&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-25 20:39:29,981 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/videos?part=contentDetails%2Csnippet%2Cstatistics&id=VGgiY0UeLNM%2CsuHhLDnXxR0%2CziQOZyJRO7g%2C0g5rv8B6Fis%2C1Km_GEjUn3M%2CHhDErDQwIVk%2CJWNJFDUR5xg%2CwRkFZchpCHk%2CzeLHllbPY4o%2CbRjSd5Sr6q8%2CamZXGLYSKNQ%2Cv1xDO3HjBzQ%2CKqmLh2E2eMQ%2CRPmR3op5TVA%2CRWU0uxpAaNc&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-25 20:39:29,984 [INFO] app.tools.youtube: youtube.search kept 15/15 short-form items (<=300s)
+2026-05-25 20:39:30,009 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/videos?part=contentDetails%2Csnippet%2Cstatistics&id=RWU0uxpAaNc%2Cu0NjxMJsex8%2C_x3BQPNQx6I%2C-T1_mGBUeAA%2Cb1wlU0y3FN4%2CzeLHllbPY4o%2Cp_kDrYbdcUg%2CePyP5lLv2xQ%2CwHFI11kafVk%2Cv1xDO3HjBzQ%2CKuj5ZWP65BM%2CUXypKPg0npw%2C9TX1FMliOvc%2Cz0Rwk0lwcxM%2CMHwtN_wJd6U&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-25 20:39:30,014 [INFO] app.tools.youtube: youtube.search kept 15/15 short-form items (<=300s)
+2026-05-25 20:39:30,173 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/videos?part=contentDetails%2Csnippet%2Cstatistics&id=WmZkBmiolT8%2CyfA0aoMIPqI%2C3nXhqlgBIv8%2Ct3WSTqO7_jo%2CWuvcxZQXtV0%2CIoyoYTqqUfo%2CMlp3tH9wdI4%2CFgnXkewQ_Ik%2CL6htasilp_M%2CSweMjB_0o8g%2CmTiHSh4oyh8%2C2_-MBDOIf38%2CHVMAaYneRTU%2CmcilGZs8rN8%2CkT1tj8uMoSE&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-25 20:39:30,196 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/videos?part=contentDetails%2Csnippet%2Cstatistics&id=EbHAWUD3KXU%2CHhDErDQwIVk%2C_x3BQPNQx6I%2CzeLHllbPY4o%2CVGgiY0UeLNM%2CBAmLfyFQhHo%2CVMbZ6YIVcv8%2CJ5oj_ghFVRo%2CUXypKPg0npw%2CRWU0uxpAaNc%2CLUtS1eeW3S4%2C-3_385_uF04%2CePyP5lLv2xQ%2Cex7K1Y8mb5k%2CUiERB0cvJC0&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-25 20:39:30,201 [INFO] app.tools.youtube: youtube.search kept 15/15 short-form items (<=300s)
+2026-05-25 20:39:30,202 [INFO] app.tools.youtube: youtube.search kept 15/15 short-form items (<=300s)
+2026-05-25 20:39:30,202 [INFO] app.agents.youtube_shorts: youtube_agent.fanout queries=4 unique_videos=50
+2026-05-25 20:39:30,203 [INFO] app.agents.youtube_shorts: youtube_agent: 30 videos after quality filter (from 50)
+2026-05-25 20:39:33,912 [INFO] app.agents.youtube_shorts: youtube_agent.transcripts fetched 0/18
+2026-05-25 20:39:33,912 [INFO] app.llm.factory: [LLM] role=youtube_agent                 provider=groq        model=llama-3.3-70b-versatile
+2026-05-25 20:39:33,949 [INFO] app.llm.factory: [LLM] role=youtube_agent                 provider=groq        model=llama-3.3-70b-versatile
+2026-05-25 20:39:33,986 [INFO] app.llm.factory: [LLM] role=youtube_agent                 provider=groq        model=llama-3.3-70b-versatile
+2026-05-25 20:39:34,711 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-25 20:39:34,945 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-25 20:39:35,168 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-25 20:39:35,171 [INFO] app.agents.youtube_shorts: youtube_agent.pass1 batches=3 mentions=15
+2026-05-25 20:39:35,171 [INFO] app.agents.youtube_shorts: youtube_agent.two_pass clusters=13 (top: ['daal baati', 'Nagaur pashu mela', 'palace of the royal family of Udaipur', 'Choki Dhani Jaipur', 'Ram rot'])
+2026-05-25 20:39:35,171 [INFO] app.llm.factory: [LLM] role=youtube_agent                 provider=groq        model=llama-3.3-70b-versatile
+2026-05-25 20:39:36,704 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-25 20:39:36,707 [INFO] app.agents.youtube_shorts: youtube_agent.pass2 returned=7
+2026-05-25 20:39:36,707 [INFO] app.agents.youtube_shorts: validate.drop reason=short_body chars=34 place='Ram rot' body='A traditional dish from Rajasthan.'
+2026-05-25 20:39:36,707 [INFO] app.agents.youtube_shorts: youtube_agent.done extracted=7 kept=6 returned=6
+
+YouTube: 6 discoveries
+  [ 1] (youtube) daal baati
+       tags=['dish', 'local cuisine']  body=A traditional dish from Rajasthan, often served in the fields.
+  [ 2] (youtube) Nagaur pashu mela
+       tags=['festival']  body=A festival in Nagaur, known for its pashu mela.
+  [ 3] (youtube) palace of the royal family of Udaipur
+       tags=['palace', 'heritage']  body=A palace that showcases the rich history of the royal family of Udaipur.
+  [ 4] (youtube) Choki Dhani Jaipur
+       tags=['restaurant', 'local cuisine']  body=A restaurant in Jaipur, known for its traditional cuisine.
+  [ 5] (youtube) Jaipur Old City
+       tags=['neighborhood', 'heritage']  body=A neighborhood in Jaipur, known for its historic architecture and cultural significance.
+  [ 6] (youtube) Hawa Mahal Jaipur
+       tags=['monument', 'heritage']  body=A historic monument in Jaipur, known for its unique architecture.
+
+======================================================================
+  Stage 3 — Reddit agent (sequential)
+======================================================================
+2026-05-25 20:39:36,707 [INFO] app.agents.reddit: reddit_agent.start subs=['travel', 'solotravel', 'india', 'IndiaTravel', 'rajasthan'] queries=['Rajasthan, India tips', 'Rajasthan, India what to avoid', 'Rajasthan, India hidden gems avoid tourists', 'Rajasthan, India heritage', 'Rajasthan, India peak'] pairs=15
+2026-05-25 20:39:36,707 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India tips' limit=8
+2026-05-25 20:39:37,724 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/search.json?q=Rajasthan%2C+India+tips&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:39:37,795 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India tips' got=8 (via https://www.reddit.com)
+2026-05-25 20:39:38,804 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India tips' limit=8
+2026-05-25 20:39:39,355 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/search.json?q=Rajasthan%2C+India+tips&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:39:39,371 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India tips' got=8 (via https://www.reddit.com)
+2026-05-25 20:39:40,385 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India tips' limit=8
+2026-05-25 20:39:40,989 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/search.json?q=Rajasthan%2C+India+tips&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:39:40,991 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India tips' got=8 (via https://www.reddit.com)
+2026-05-25 20:39:42,001 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India what to avoid' limit=8
+2026-05-25 20:39:42,598 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/search.json?q=Rajasthan%2C+India+what+to+avoid&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:39:42,600 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India what to avoid' got=2 (via https://www.reddit.com)
+2026-05-25 20:39:43,606 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India what to avoid' limit=8
+2026-05-25 20:39:44,110 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/search.json?q=Rajasthan%2C+India+what+to+avoid&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:39:44,111 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India what to avoid' got=1 (via https://www.reddit.com)
+2026-05-25 20:39:45,123 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India what to avoid' limit=8
+2026-05-25 20:39:45,617 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/search.json?q=Rajasthan%2C+India+what+to+avoid&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:39:45,618 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India what to avoid' got=1 (via https://www.reddit.com)
+2026-05-25 20:39:46,621 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India hidden gems avoid tourists' limit=8
+2026-05-25 20:39:47,751 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/search.json?q=Rajasthan%2C+India+hidden+gems+avoid+tourists&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:39:48,052 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India hidden gems avoid tourists' got=8 (via https://www.reddit.com)
+2026-05-25 20:39:49,056 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India hidden gems avoid tourists' limit=8
+2026-05-25 20:39:49,979 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/search.json?q=Rajasthan%2C+India+hidden+gems+avoid+tourists&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:39:49,985 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India hidden gems avoid tourists' got=8 (via https://www.reddit.com)
+2026-05-25 20:39:50,988 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India hidden gems avoid tourists' limit=8
+2026-05-25 20:39:51,876 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/search.json?q=Rajasthan%2C+India+hidden+gems+avoid+tourists&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:39:51,878 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India hidden gems avoid tourists' got=8 (via https://www.reddit.com)
+2026-05-25 20:39:52,889 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India heritage' limit=8
+2026-05-25 20:39:53,904 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/search.json?q=Rajasthan%2C+India+heritage&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:39:53,916 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India heritage' got=8 (via https://www.reddit.com)
+2026-05-25 20:39:54,926 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India heritage' limit=8
+2026-05-25 20:39:56,193 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/search.json?q=Rajasthan%2C+India+heritage&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:39:56,199 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India heritage' got=6 (via https://www.reddit.com)
+2026-05-25 20:39:57,203 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India heritage' limit=8
+2026-05-25 20:39:57,851 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/search.json?q=Rajasthan%2C+India+heritage&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:39:57,857 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India heritage' got=8 (via https://www.reddit.com)
+2026-05-25 20:39:58,871 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India peak' limit=8
+2026-05-25 20:39:59,857 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/search.json?q=Rajasthan%2C+India+peak&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:39:59,865 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India peak' got=8 (via https://www.reddit.com)
+2026-05-25 20:40:00,874 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India peak' limit=8
+2026-05-25 20:40:01,815 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/search.json?q=Rajasthan%2C+India+peak&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:40:01,838 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India peak' got=5 (via https://www.reddit.com)
+2026-05-25 20:40:02,841 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India peak' limit=8
+2026-05-25 20:40:03,536 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/search.json?q=Rajasthan%2C+India+peak&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:40:03,567 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India peak' got=8 (via https://www.reddit.com)
+2026-05-25 20:40:03,570 [INFO] app.agents.reddit: reddit.filter.dropped_off_topic count=22 kept=23
+2026-05-25 20:40:03,570 [INFO] app.agents.reddit: reddit_agent: 10 posts after filter (from 65, dest_tokens=['india', 'rajasthan', 'rajasthan, india'])
+2026-05-25 20:40:04,059 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/comments/1p4n5qy/my_foreign_friends_experienced_rural_indian.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 20:40:05,636 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/comments/1tbarqa/i_am_a_urologist_trained_at_aiims_delhi_and.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 20:40:07,181 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/comments/1l1lwlo/went_to_bali_came_back_with_ptsd_from_indian.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 20:40:08,775 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/comments/1ppjs8s/adani_rajasthan_judge_who_ruled_against_adaniled.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 20:40:10,322 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/comments/1nw1ocy/india_today_cough_syrup_that_killed_child_in.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 20:40:11,892 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/comments/1lf5qqz/those_who_speak_english_will_soon_feel_ashamed.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 20:40:13,478 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/comments/1r71x5z/4_weeks_in_central_and_northish_india_w_group.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 20:40:15,369 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/comments/1ra0yz1/survived_20_days_solo_india_first_time_to_india.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 20:40:17,011 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/comments/1t5yvuf/skip_delhi_rajasthan_manali_if_youre_planning_a.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 20:40:18,557 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/comments/1ojzta0/is_india_really_that_overwhelming_for_first_solo.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 20:40:18,559 [INFO] app.llm.factory: [LLM] role=reddit_agent                  provider=groq        model=llama-3.3-70b-versatile
+2026-05-25 20:40:20,130 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-25 20:40:20,132 [INFO] app.agents.reddit: reddit_agent.llm_extracted=5
+2026-05-25 20:40:20,133 [INFO] app.agents.reddit: reddit.validate.drop reason=irrelevant_negativity phrase='kidney stone' topic='Rajasthan kidney stone risk'
+2026-05-25 20:40:20,133 [INFO] app.agents.reddit: reddit.validate.drop reason=vague phrase='must-visit' topic='Rajasthan as a tourist destination'
+2026-05-25 20:40:20,133 [INFO] app.agents.reddit: reddit_agent.done extracted=5 kept=3 returned=3
+
+Reddit: 3 discoveries
+  [ 1] ( reddit) Delhi, Jaipur, Jodhpur, and Jaisalmer
+       tags=['reddit', 'recommendation']  body=Locals recommend: These cities in Rajasthan are popular destinations for travelers, but some might find them overwhelmin…
+  [ 2] ( reddit) Rajasthan rural areas
+       tags=['reddit', 'recommendation']  body=Locals recommend: Rural areas in Rajasthan offer a glimpse into the real India, with warm hospitality and a chance to ex…
+  [ 3] ( reddit) Jodhpur health risks
+       tags=['reddit', 'warning']  body=Warning: There is a risk of getting mildly sick from 'filtered water' or food from budget hotels in Jodhpur, Rajasthan.
+
+======================================================================
+  Stage 4 — Google Blog agent (sequential)
+======================================================================
+2026-05-25 20:40:20,133 [INFO] app.agents.google_blog: google_agent.start queries=['top attractions in Rajasthan, India', 'must see Rajasthan, India', 'Rajasthan, India heritage travel tips', 'Rajasthan, India itinerary things to do']
+2026-05-25 20:40:21,557 [INFO] httpx: HTTP Request: POST https://api.tavily.com/search "HTTP/1.1 200 OK"
+2026-05-25 20:40:21,558 [INFO] app.tools.tavily_search: tavily.search q='Rajasthan, India itinerary things to do' results=0
+2026-05-25 20:40:22,155 [INFO] httpx: HTTP Request: POST https://api.tavily.com/search "HTTP/1.1 200 OK"
+2026-05-25 20:40:22,156 [INFO] app.tools.tavily_search: tavily.search q='must see Rajasthan, India' results=5
+2026-05-25 20:40:22,451 [INFO] httpx: HTTP Request: POST https://api.tavily.com/search "HTTP/1.1 200 OK"
+2026-05-25 20:40:22,452 [INFO] app.tools.tavily_search: tavily.search q='Rajasthan, India heritage travel tips' results=5
+2026-05-25 20:40:23,546 [INFO] httpx: HTTP Request: POST https://api.tavily.com/search "HTTP/1.1 200 OK"
+2026-05-25 20:40:23,547 [INFO] app.tools.tavily_search: tavily.search q='top attractions in Rajasthan, India' results=0
+2026-05-25 20:40:23,547 [INFO] app.tools.tavily_search: tavily.fanout queries=4 unique_results=10
+2026-05-25 20:40:23,547 [INFO] app.agents.google_blog: google_agent: 10 articles after fanout+dedupe (using 10)
+2026-05-25 20:40:23,547 [INFO] app.llm.factory: [LLM] role=google_agent                  provider=groq        model=llama-3.3-70b-versatile
+2026-05-25 20:40:24,522 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-25 20:40:24,525 [INFO] app.agents.google_blog: google_agent.anchor_pass extracted=4
+2026-05-25 20:40:24,525 [INFO] app.llm.factory: [LLM] role=google_agent                  provider=groq        model=llama-3.3-70b-versatile
+2026-05-25 20:40:26,132 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-25 20:40:26,136 [INFO] app.agents.google_blog: google_agent.llm_extracted=5
+2026-05-25 20:40:26,136 [INFO] app.agents.google_blog: google_agent.validate.drop reason=vague phrase='stunning' place='Amber Palace'
+2026-05-25 20:40:26,136 [INFO] app.agents.google_blog: google_agent.validate.drop reason=vague phrase='beautiful views' place='Mehrangarh Fort'
+2026-05-25 20:40:26,136 [INFO] app.agents.google_blog: google_agent.validate.drop reason=vague phrase='stunning' place='Taj Lake Palace'
+2026-05-25 20:40:26,136 [INFO] app.agents.google_blog: google_agent.validate.drop reason=vague phrase='stunning' place='Amber Palace'
+2026-05-25 20:40:26,136 [INFO] app.agents.google_blog: google_agent.validate.drop reason=vague phrase='stunning' place='Taj Lake Palace in Udaipur'
+2026-05-25 20:40:26,136 [INFO] app.agents.google_blog: google_agent.validate.drop reason=vague phrase='beautiful architecture' place='Raj Ghat'
+2026-05-25 20:40:26,136 [INFO] app.agents.google_blog: google_agent.done extracted=5 anchor=4 merged=9 kept=3 returned=3
+
+Google Blog: 3 discoveries
+  [ 1] (   blog) Raj Ghat
+       tags=['anchor_hint']  body=A memorial dedicated to Mahatma Gandhi in Delhi, near Rajasthan, known for its black marble platform and tranquil surrou…
+  [ 2] (   blog) Mehrangarh Fort
+       tags=['blog']  body=Impressive fort in Jodhpur, the 'Blue City', with seven gates and a museum of Marwar royal palanquins and Rajput weaponr…
+  [ 3] (   blog) Pushkar’s sacred lake and Brahma Temple
+       tags=['blog']  body=Sacred lake and temple in Pushkar, a city in Rajasthan, known for its religious significance and beautiful surroundings …
+
+======================================================================
+  Stage 5 — Merge (with anchor seeding)
+======================================================================
+Anchor seeds     : 5 (from top_anchors=['Hawa Mahal', 'Amer Fort', 'Jantar Mantar', 'City Palace', 'Albert Hall Museum', 'Lake Pichola'])
+Total discoveries: 17  (anchors=5  yt=6  reddit=3  blog=3)
+
+======================================================================
+  Stage 6 — Synthesizer (LLM call)
+======================================================================
+2026-05-25 20:40:26,136 [INFO] app.agents.synthesizer: synthesizer.start destination='Rajasthan, India' discoveries=17 candidates=17 days=11 pace=4
+2026-05-25 20:40:26,138 [INFO] app.agents.synthesizer: synthesizer.overlays=['regions/india', 'trip_shapes/region_multi_city', 'vibes/food_and_markets']
+2026-05-25 20:40:26,138 [INFO] app.llm.factory: [LLM] role=synthesizer                   provider=cerebras    model=qwen-3-235b-a22b-instruct-2507
+2026-05-25 20:40:28,289 [INFO] app.llm.factory: [LLM] role=synthesizer:fallback          provider=groq        model=llama-3.3-70b-versatile
+2026-05-25 20:40:28,327 [INFO] app.agents.synthesizer: [LLM] synthesizer → invoking  candidates=17  days=11
+2026-05-25 20:40:37,379 [INFO] httpx: HTTP Request: POST https://api.cerebras.ai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-25 20:40:37,395 [INFO] app.agents.synthesizer: [LLM] synthesizer → returned  days=11  route='Jaipur (3) → Jodhpur (3) → Jaisalmer (3) → Udaipur (2)'
+2026-05-25 20:40:37,397 [INFO] app.agents.synthesizer: synthesizer.done attempt=1 days=11 stops=33 discoveries=12
+Days       : 11
+Total stops: 33
+Discoveries: 12
+Route      : Jaipur (3) → Jodhpur (3) → Jaisalmer (3) → Udaipur (2)
+Transport  : Overnight sleeper trains between Jaipur–Jodhpur and Jodhpur–Jaisalmer save time and accommodation; use private cabs for short hops like Jaisalmer–Udaipur. Within cities, hire auto-rickshaws or rent scooters for flexibility.
+Stays      : {'Jaipur': 'Heritage haveli in the old city near Johari Bazaar', 'Jodhpur': 'Heritage haveli in the blue city, close to Clock Tower', 'Jaisalmer': 'Heritage desert haveli near the fort', 'Udaipur': 'Heritage haveli on the banks of Lake Pichola'}
+Budget     : ₹1,40,000–1,60,000 for two travelers
+Seasonal   : ['Peak season — book trains, hotels, and marquee experiences well ahead.', 'Nights get cold this time of year — pack layers/thermals, especially in desert or hill areas.']
+Stats      : places=5 tips=0 photo_stops=4
+
+--- Per-stop source breakdown ---
+  Day 1 #1   5:30 PM  (youtube)  Hawa Mahal Jaipur
+  Day 1 #2   6:30 PM  (youtube)  Jaipur Old City
+  Day 1 #3   8:15 PM  (youtube)  daal baati
+  Day 2 #1   8:00 AM  (   maps)  Amer Fort
+  Day 2 #2  10:30 AM  (   maps)  Jantar Mantar
+  Day 2 #3  12:00 PM  (   maps)  City Palace
+  Day 3 #1   9:00 AM  (   maps)  Albert Hall Museum
+  Day 3 #2  11:30 AM  (   maps)  Kripal Kumbh
+  Day 3 #3   7:30 PM  (youtube)  Choki Dhani Jaipur
+  Day 4 #1  10:00 AM  (   blog)  Mehrangarh Fort
+  Day 4 #2   1:00 PM  (   maps)  Clock Tower Market
+  Day 4 #3   5:30 PM  (   maps)  Rooftop at Raas Devli
+  Day 5 #1   8:30 AM  (   maps)  Mandore Gardens
+  Day 5 #2  12:00 PM  (   maps)  Shri Nath Dhaba
+  Day 5 #3   3:00 PM  (   maps)  Sardar Market
+  Day 6 #1   9:00 AM  (   maps)  Jodhpur Sweets
+  Day 6 #2  10:30 AM  (   maps)  Block Printing Workshop
+  Day 6 #3   7:00 PM  (   maps)  Overnight train to Jaisalmer
+  Day 7 #1   9:00 AM  (   maps)  Jaisalmer Fort
+  Day 7 #2  11:30 AM  (   maps)  Patwon Ki Haveli
+  Day 7 #3   1:00 PM  (   maps)  Saffron Rooftop Café
+  Day 8 #1   4:00 PM  (   maps)  Bada Bagh
+  Day 8 #2   5:30 PM  (   maps)  Sam Sand Dunes
+  Day 8 #3   9:00 PM  (   maps)  Desert Boys Dhaba
+  Day 9 #1   8:00 AM  (   maps)  Gadisar Lake
+  Day 9 #2  12:00 PM  (   maps)  Road trip to Udaipur
+  Day 9 #3   1:00 PM  (   maps)  Lunch in Jaisalmer
+  Day 10 #1   1:00 PM  (   maps)  Lunch in Udaipur
+  Day 10 #2   5:30 PM  (   maps)  Lake Pichola
+  Day 10 #3   8:00 PM  (   maps)  Ambrai Restaurant
+  Day 11 #1  11:00 AM  (   maps)  Old Udaipur market walk
+  Day 11 #2  11:30 AM  (   maps)  Gangaur Ghat
+  Day 11 #3   1:00 PM  (   maps)  Lunch in Udaipur
+
+--- Source totals across all stops ---
+     maps: 28
+  youtube: 4
+     blog: 1
+
+======================================================================
+  Final AIItinerary JSON (stdout)
+======================================================================

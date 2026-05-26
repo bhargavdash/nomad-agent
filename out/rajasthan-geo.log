@@ -1,0 +1,418 @@
+Loading trip from: samples\rajasthan-dec20-31.json
+
+======================================================================
+  Trip: Rajasthan, India  (2026-12-20 → 2026-12-31)
+======================================================================
+Duration  : 11 days
+Travelers : 2
+Vibes     : heritage, desert, local cuisine, photography
+Pace      : Balanced
+Budget    : Medium
+Accommo.  : Heritage Haveli
+
+======================================================================
+  Stage 1 — Signals (pure Python + LLM fallback when region unknown)
+======================================================================
+2026-05-25 20:59:15,845 [INFO] app.llm.factory: [LLM] role=signals_classifier            provider=cerebras    model=qwen-3-235b-a22b-instruct-2507
+2026-05-25 20:59:17,377 [INFO] app.signals: [LLM] anchor_hints: fetching 5-6 landmarks for dest='Rajasthan, India'
+2026-05-25 20:59:18,399 [INFO] httpx: HTTP Request: POST https://api.cerebras.ai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-25 20:59:18,413 [INFO] app.signals: signals.anchor_hints dest='Rajasthan, India' anchors=['Amber Fort', 'Hawa Mahal', 'City Palace Jaipur', 'Jantar Mantar Jaipur', 'Lake Palace Udaipur', 'Mehrangarh Fort']
+Region          : india
+Season          : peak
+Crowd level     : peak
+Budget tier     : mid
+Pace density    : 4 stops/day target
+Active festivals: —
+Weather hint    : —
+Query modifiers : ['peak season', 'best weather', 'less crowded', 'local favorites', 'heritage', 'desert', 'local cuisine', 'photography']
+Warnings        : —
+Vibe→source wts : {'youtube': 0.3333333333333333, 'reddit': 0.3333333333333333, 'blog': 0.3333333333333333}
+Top anchors     : ['Amber Fort', 'Hawa Mahal', 'City Palace Jaipur', 'Jantar Mantar Jaipur', 'Lake Palace Udaipur', 'Mehrangarh Fort']
+
+======================================================================
+  Stage 2 — YouTubeShorts agent (sequential)
+======================================================================
+2026-05-25 20:59:18,413 [INFO] app.agents.youtube_shorts: youtube_agent.start queries=['Rajasthan, India travel vlog', 'Rajasthan, India food', 'top things to do in Rajasthan, India', 'Rajasthan, India heritage']
+2026-05-25 20:59:18,413 [INFO] app.tools.youtube: youtube.search query='Rajasthan, India travel vlog' max=15
+2026-05-25 20:59:18,434 [INFO] app.tools.youtube: youtube.search query='Rajasthan, India food' max=15
+2026-05-25 20:59:18,453 [INFO] app.tools.youtube: youtube.search query='top things to do in Rajasthan, India' max=15
+2026-05-25 20:59:18,469 [INFO] app.tools.youtube: youtube.search query='Rajasthan, India heritage' max=15
+2026-05-25 20:59:19,583 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/search?part=id&q=Rajasthan%2C+India+food&type=video&videoDuration=short&maxResults=15&order=relevance&safeSearch=moderate&publishedAfter=2024-05-25T15%3A29%3A18Z&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-25 20:59:19,609 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/search?part=id&q=Rajasthan%2C+India+travel+vlog&type=video&videoDuration=short&maxResults=15&order=relevance&safeSearch=moderate&publishedAfter=2024-05-25T15%3A29%3A18Z&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-25 20:59:19,882 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/search?part=id&q=top+things+to+do+in+Rajasthan%2C+India&type=video&videoDuration=short&maxResults=15&order=relevance&safeSearch=moderate&publishedAfter=2024-05-25T15%3A29%3A18Z&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-25 20:59:19,908 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/videos?part=contentDetails%2Csnippet%2Cstatistics&id=WmZkBmiolT8%2CWvYtke5ubLw%2CIoyoYTqqUfo%2CyfA0aoMIPqI%2CWuvcxZQXtV0%2C3nXhqlgBIv8%2C-FARyBY7Op4%2C8oyF-EXPXo8%2CUEy_7mce7Wk%2CnPE8Cx1tnEg%2CLUtS1eeW3S4%2CyghcCZSsO7U%2CSHZML9DhqdA%2CMlp3tH9wdI4%2CfJ4uqf0UbDA&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-25 20:59:19,929 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/videos?part=contentDetails%2Csnippet%2Cstatistics&id=EbHAWUD3KXU%2CHhDErDQwIVk%2CzeLHllbPY4o%2C_x3BQPNQx6I%2CVGgiY0UeLNM%2CBAmLfyFQhHo%2CVMbZ6YIVcv8%2CJ5oj_ghFVRo%2CUXypKPg0npw%2CRWU0uxpAaNc%2CLUtS1eeW3S4%2C-3_385_uF04%2CePyP5lLv2xQ%2Cex7K1Y8mb5k%2CUiERB0cvJC0&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-25 20:59:19,931 [INFO] app.tools.youtube: youtube.search kept 15/15 short-form items (<=300s)
+2026-05-25 20:59:19,932 [INFO] app.tools.youtube: youtube.search kept 15/15 short-form items (<=300s)
+2026-05-25 20:59:19,981 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/search?part=id&q=Rajasthan%2C+India+heritage&type=video&videoDuration=short&maxResults=15&order=relevance&safeSearch=moderate&publishedAfter=2024-05-25T15%3A29%3A18Z&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-25 20:59:20,214 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/videos?part=contentDetails%2Csnippet%2Cstatistics&id=u0NjxMJsex8%2CRWU0uxpAaNc%2C_x3BQPNQx6I%2C-T1_mGBUeAA%2Cb1wlU0y3FN4%2CzeLHllbPY4o%2Cp_kDrYbdcUg%2CwHFI11kafVk%2CePyP5lLv2xQ%2Cv1xDO3HjBzQ%2C6l4eKktz4zg%2CKuj5ZWP65BM%2CMHwtN_wJd6U%2Cz0Rwk0lwcxM%2CUXypKPg0npw&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-25 20:59:20,217 [INFO] app.tools.youtube: youtube.search kept 15/15 short-form items (<=300s)
+2026-05-25 20:59:20,284 [INFO] httpx: HTTP Request: GET https://www.googleapis.com/youtube/v3/videos?part=contentDetails%2Csnippet%2Cstatistics&id=VGgiY0UeLNM%2CsuHhLDnXxR0%2CziQOZyJRO7g%2CJWNJFDUR5xg%2C0g5rv8B6Fis%2C1Km_GEjUn3M%2CbRjSd5Sr6q8%2CHhDErDQwIVk%2CwRkFZchpCHk%2CzeLHllbPY4o%2CDE3Gh1DzHMQ%2Cv1xDO3HjBzQ%2CamZXGLYSKNQ%2CKqmLh2E2eMQ%2C_x3BQPNQx6I&key=AIzaSyCBymgOE0_HvLDQoh0mZf3NNErUTrtskbk "HTTP/1.1 200 OK"
+2026-05-25 20:59:20,310 [INFO] app.tools.youtube: youtube.search kept 15/15 short-form items (<=300s)
+2026-05-25 20:59:20,310 [INFO] app.agents.youtube_shorts: youtube_agent.fanout queries=4 unique_videos=49
+2026-05-25 20:59:20,311 [INFO] app.agents.youtube_shorts: youtube_agent: 30 videos after quality filter (from 49)
+2026-05-25 20:59:23,511 [INFO] app.agents.youtube_shorts: youtube_agent.transcripts fetched 0/18
+2026-05-25 20:59:23,511 [INFO] app.llm.factory: [LLM] role=youtube_agent                 provider=groq        model=llama-3.3-70b-versatile
+2026-05-25 20:59:23,683 [INFO] app.llm.factory: [LLM] role=youtube_agent                 provider=groq        model=llama-3.3-70b-versatile
+2026-05-25 20:59:23,723 [INFO] app.llm.factory: [LLM] role=youtube_agent                 provider=groq        model=llama-3.3-70b-versatile
+2026-05-25 20:59:24,123 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-25 20:59:24,125 [WARNING] app.agents.youtube_shorts: youtube_agent.pass1_batch_failed offset=13 err=Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01keppqp1rery8xsxw4fa59tk4` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99629, Requested 1819. Please try again in 20m51.072s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}
+2026-05-25 20:59:24,171 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-25 20:59:24,172 [WARNING] app.agents.youtube_shorts: youtube_agent.pass1_batch_failed offset=7 err=Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01keppqp1rery8xsxw4fa59tk4` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99628, Requested 2074. Please try again in 24m30.528s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}
+2026-05-25 20:59:24,186 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-25 20:59:24,187 [WARNING] app.agents.youtube_shorts: youtube_agent.pass1_batch_failed offset=1 err=Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01keppqp1rery8xsxw4fa59tk4` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99628, Requested 1404. Please try again in 14m51.647999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}
+2026-05-25 20:59:24,187 [INFO] app.agents.youtube_shorts: youtube_agent.pass1 batches=3 mentions=0
+2026-05-25 20:59:24,187 [INFO] app.agents.youtube_shorts: youtube_agent.two_pass: pass1 produced 0 mentions
+2026-05-25 20:59:24,187 [INFO] app.agents.youtube_shorts: youtube_agent.done extracted=0 kept=0 returned=0
+
+YouTube: 0 discoveries
+
+======================================================================
+  Stage 3 — Reddit agent (sequential)
+======================================================================
+2026-05-25 20:59:24,187 [INFO] app.agents.reddit: reddit_agent.start subs=['travel', 'solotravel', 'india', 'IndiaTravel', 'rajasthan'] queries=['Rajasthan, India tips', 'Rajasthan, India what to avoid', 'Rajasthan, India hidden gems avoid tourists', 'Rajasthan, India heritage', 'Rajasthan, India peak'] pairs=15
+2026-05-25 20:59:24,187 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India tips' limit=8
+2026-05-25 20:59:24,830 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/search.json?q=Rajasthan%2C+India+tips&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:59:25,136 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India tips' got=8 (via https://www.reddit.com)
+2026-05-25 20:59:26,137 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India tips' limit=8
+2026-05-25 20:59:26,623 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/search.json?q=Rajasthan%2C+India+tips&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:59:26,625 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India tips' got=8 (via https://www.reddit.com)
+2026-05-25 20:59:27,626 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India tips' limit=8
+2026-05-25 20:59:28,166 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/search.json?q=Rajasthan%2C+India+tips&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:59:28,188 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India tips' got=8 (via https://www.reddit.com)
+2026-05-25 20:59:29,196 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India what to avoid' limit=8
+2026-05-25 20:59:29,740 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/search.json?q=Rajasthan%2C+India+what+to+avoid&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:59:29,742 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India what to avoid' got=2 (via https://www.reddit.com)
+2026-05-25 20:59:30,754 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India what to avoid' limit=8
+2026-05-25 20:59:31,271 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/search.json?q=Rajasthan%2C+India+what+to+avoid&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:59:31,273 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India what to avoid' got=1 (via https://www.reddit.com)
+2026-05-25 20:59:32,276 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India what to avoid' limit=8
+2026-05-25 20:59:32,798 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/search.json?q=Rajasthan%2C+India+what+to+avoid&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:59:32,800 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India what to avoid' got=1 (via https://www.reddit.com)
+2026-05-25 20:59:33,814 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India hidden gems avoid tourists' limit=8
+2026-05-25 20:59:35,025 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/search.json?q=Rajasthan%2C+India+hidden+gems+avoid+tourists&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:59:35,315 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India hidden gems avoid tourists' got=8 (via https://www.reddit.com)
+2026-05-25 20:59:36,322 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India hidden gems avoid tourists' limit=8
+2026-05-25 20:59:37,265 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/search.json?q=Rajasthan%2C+India+hidden+gems+avoid+tourists&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:59:37,288 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India hidden gems avoid tourists' got=8 (via https://www.reddit.com)
+2026-05-25 20:59:38,290 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India hidden gems avoid tourists' limit=8
+2026-05-25 20:59:39,206 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/search.json?q=Rajasthan%2C+India+hidden+gems+avoid+tourists&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:59:39,213 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India hidden gems avoid tourists' got=8 (via https://www.reddit.com)
+2026-05-25 20:59:40,225 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India heritage' limit=8
+2026-05-25 20:59:41,177 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/search.json?q=Rajasthan%2C+India+heritage&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:59:41,186 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India heritage' got=8 (via https://www.reddit.com)
+2026-05-25 20:59:42,190 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India heritage' limit=8
+2026-05-25 20:59:43,049 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/search.json?q=Rajasthan%2C+India+heritage&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:59:43,057 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India heritage' got=6 (via https://www.reddit.com)
+2026-05-25 20:59:44,063 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India heritage' limit=8
+2026-05-25 20:59:44,869 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/search.json?q=Rajasthan%2C+India+heritage&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:59:44,892 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India heritage' got=8 (via https://www.reddit.com)
+2026-05-25 20:59:45,893 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India peak' limit=8
+2026-05-25 20:59:46,902 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/search.json?q=Rajasthan%2C+India+peak&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:59:46,908 [INFO] app.tools.reddit: reddit.search sub=travel q='Rajasthan, India peak' got=8 (via https://www.reddit.com)
+2026-05-25 20:59:47,920 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India peak' limit=8
+2026-05-25 20:59:48,746 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/search.json?q=Rajasthan%2C+India+peak&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:59:48,754 [INFO] app.tools.reddit: reddit.search sub=solotravel q='Rajasthan, India peak' got=5 (via https://www.reddit.com)
+2026-05-25 20:59:49,761 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India peak' limit=8
+2026-05-25 20:59:52,000 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/search.json?q=Rajasthan%2C+India+peak&restrict_sr=1&sort=relevance&t=year&limit=8 "HTTP/1.1 200 OK"
+2026-05-25 20:59:52,001 [INFO] app.tools.reddit: reddit.search sub=india q='Rajasthan, India peak' got=0 (via https://www.reddit.com)
+2026-05-25 20:59:52,004 [INFO] app.agents.reddit: reddit.filter.dropped_off_topic count=21 kept=21
+2026-05-25 20:59:52,005 [INFO] app.agents.reddit: reddit_agent: 10 posts after filter (from 62, dest_tokens=['india', 'rajasthan', 'rajasthan, india'])
+2026-05-25 20:59:52,618 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/comments/1p4n5qy/my_foreign_friends_experienced_rural_indian.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 20:59:54,183 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/comments/1tbarqa/i_am_a_urologist_trained_at_aiims_delhi_and.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 20:59:55,670 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/comments/1l1lwlo/went_to_bali_came_back_with_ptsd_from_indian.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 20:59:57,288 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/comments/1ppjs8s/adani_rajasthan_judge_who_ruled_against_adaniled.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 20:59:58,889 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/comments/1nw1ocy/india_today_cough_syrup_that_killed_child_in.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 21:00:00,484 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/india/comments/1lf5qqz/those_who_speak_english_will_soon_feel_ashamed.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 21:00:02,187 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/comments/1r71x5z/4_weeks_in_central_and_northish_india_w_group.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 21:00:04,408 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/comments/1ra0yz1/survived_20_days_solo_india_first_time_to_india.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 21:00:06,058 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/travel/comments/1t5yvuf/skip_delhi_rajasthan_manali_if_youre_planning_a.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 21:00:07,587 [INFO] httpx: HTTP Request: GET https://www.reddit.com/r/solotravel/comments/1ojzta0/is_india_really_that_overwhelming_for_first_solo.json?limit=6&depth=1&sort=top "HTTP/1.1 200 OK"
+2026-05-25 21:00:07,589 [INFO] app.llm.factory: [LLM] role=reddit_agent                  provider=groq        model=llama-3.3-70b-versatile
+2026-05-25 21:00:07,837 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-25 21:00:07,838 [ERROR] app.agents.reddit: reddit_agent unexpected failure: Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01keppqp1rery8xsxw4fa59tk4` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99578, Requested 3905. Please try again in 50m9.312s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}
+Traceback (most recent call last):
+  File "C:\Users\DELL\code\nomad-agent\app\agents\reddit.py", line 738, in run_reddit_agent
+    extracted = await _extract_via_llm(trip_params, signals, filtered)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL\code\nomad-agent\app\agents\reddit.py", line 590, in _extract_via_llm
+    result = await structured.ainvoke(messages)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 3255, in ainvoke
+    input_ = await coro_with_context(part(), context, create_task=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 5766, in ainvoke
+    return await self.bound.ainvoke(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 495, in ainvoke
+    llm_result = await self.agenerate_prompt(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<8 lines>...
+    )
+    ^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1763, in agenerate_prompt
+    return await self.agenerate(
+           ^^^^^^^^^^^^^^^^^^^^^
+        prompt_messages, stop=stop, callbacks=callbacks, **kwargs
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1721, in agenerate
+    raise exceptions[0]
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 2056, in _agenerate_with_cache
+    result = await self._agenerate(
+             ^^^^^^^^^^^^^^^^^^^^^^
+        messages, stop=stop, run_manager=run_manager, **kwargs
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_groq\chat_models.py", line 642, in _agenerate
+    response = await self.async_client.create(messages=message_dicts, **params)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\groq\resources\chat\completions.py", line 941, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<47 lines>...
+    )
+    ^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\groq\_base_client.py", line 1762, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\groq\_base_client.py", line 1576, in request
+    raise self._make_status_error_from_response(err.response) from None
+groq.RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01keppqp1rery8xsxw4fa59tk4` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99578, Requested 3905. Please try again in 50m9.312s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}
+
+Reddit: 0 discoveries
+
+======================================================================
+  Stage 4 — Google Blog agent (sequential)
+======================================================================
+2026-05-25 21:00:07,846 [INFO] app.agents.google_blog: google_agent.start queries=['top attractions in Rajasthan, India', 'must see Rajasthan, India', 'Rajasthan, India heritage travel tips', 'Rajasthan, India itinerary things to do']
+2026-05-25 21:00:09,004 [INFO] httpx: HTTP Request: POST https://api.tavily.com/search "HTTP/1.1 200 OK"
+2026-05-25 21:00:09,020 [INFO] httpx: HTTP Request: POST https://api.tavily.com/search "HTTP/1.1 200 OK"
+2026-05-25 21:00:09,021 [INFO] app.tools.tavily_search: tavily.search q='top attractions in Rajasthan, India' results=5
+2026-05-25 21:00:09,040 [INFO] httpx: HTTP Request: POST https://api.tavily.com/search "HTTP/1.1 200 OK"
+2026-05-25 21:00:09,051 [INFO] app.tools.tavily_search: tavily.search q='must see Rajasthan, India' results=5
+2026-05-25 21:00:09,073 [INFO] httpx: HTTP Request: POST https://api.tavily.com/search "HTTP/1.1 200 OK"
+2026-05-25 21:00:09,074 [INFO] app.tools.tavily_search: tavily.search q='Rajasthan, India heritage travel tips' results=5
+2026-05-25 21:00:09,297 [INFO] app.tools.tavily_search: tavily.search q='Rajasthan, India itinerary things to do' results=5
+2026-05-25 21:00:09,297 [INFO] app.tools.tavily_search: tavily.fanout queries=4 unique_results=18
+2026-05-25 21:00:09,297 [INFO] app.agents.google_blog: google_agent: 18 articles after fanout+dedupe (using 15)
+2026-05-25 21:00:09,297 [INFO] app.llm.factory: [LLM] role=google_agent                  provider=groq        model=llama-3.3-70b-versatile
+2026-05-25 21:00:09,528 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-25 21:00:09,529 [ERROR] app.agents.google_blog: google_agent.anchor_pass failed
+Traceback (most recent call last):
+  File "C:\Users\DELL\code\nomad-agent\app\agents\google_blog.py", line 417, in _extract_anchors_via_llm
+    result = await structured.ainvoke(messages)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 3255, in ainvoke
+    input_ = await coro_with_context(part(), context, create_task=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 5766, in ainvoke
+    return await self.bound.ainvoke(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 495, in ainvoke
+    llm_result = await self.agenerate_prompt(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<8 lines>...
+    )
+    ^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1763, in agenerate_prompt
+    return await self.agenerate(
+           ^^^^^^^^^^^^^^^^^^^^^
+        prompt_messages, stop=stop, callbacks=callbacks, **kwargs
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1721, in agenerate
+    raise exceptions[0]
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 2056, in _agenerate_with_cache
+    result = await self._agenerate(
+             ^^^^^^^^^^^^^^^^^^^^^^
+        messages, stop=stop, run_manager=run_manager, **kwargs
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_groq\chat_models.py", line 642, in _agenerate
+    response = await self.async_client.create(messages=message_dicts, **params)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\groq\resources\chat\completions.py", line 941, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<47 lines>...
+    )
+    ^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\groq\_base_client.py", line 1762, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\groq\_base_client.py", line 1576, in request
+    raise self._make_status_error_from_response(err.response) from None
+groq.RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01keppqp1rery8xsxw4fa59tk4` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99576, Requested 1831. Please try again in 20m15.648s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}
+2026-05-25 21:00:09,533 [INFO] app.llm.factory: [LLM] role=google_agent                  provider=groq        model=llama-3.3-70b-versatile
+2026-05-25 21:00:09,946 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-25 21:00:09,948 [ERROR] app.agents.google_blog: google_agent unexpected failure: Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01keppqp1rery8xsxw4fa59tk4` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99576, Requested 3471. Please try again in 43m52.608s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}
+Traceback (most recent call last):
+  File "C:\Users\DELL\code\nomad-agent\app\agents\google_blog.py", line 587, in run_google_blog_agent
+    extracted = await _extract_via_llm(trip_params, signals, capped)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL\code\nomad-agent\app\agents\google_blog.py", line 373, in _extract_via_llm
+    result = await structured.ainvoke(messages)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 3255, in ainvoke
+    input_ = await coro_with_context(part(), context, create_task=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 5766, in ainvoke
+    return await self.bound.ainvoke(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 495, in ainvoke
+    llm_result = await self.agenerate_prompt(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<8 lines>...
+    )
+    ^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1763, in agenerate_prompt
+    return await self.agenerate(
+           ^^^^^^^^^^^^^^^^^^^^^
+        prompt_messages, stop=stop, callbacks=callbacks, **kwargs
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1721, in agenerate
+    raise exceptions[0]
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 2056, in _agenerate_with_cache
+    result = await self._agenerate(
+             ^^^^^^^^^^^^^^^^^^^^^^
+        messages, stop=stop, run_manager=run_manager, **kwargs
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\langchain_groq\chat_models.py", line 642, in _agenerate
+    response = await self.async_client.create(messages=message_dicts, **params)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\groq\resources\chat\completions.py", line 941, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<47 lines>...
+    )
+    ^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\groq\_base_client.py", line 1762, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL\code\nomad-agent\.venv\Lib\site-packages\groq\_base_client.py", line 1576, in request
+    raise self._make_status_error_from_response(err.response) from None
+groq.RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01keppqp1rery8xsxw4fa59tk4` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99576, Requested 3471. Please try again in 43m52.608s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}
+
+Google Blog: 0 discoveries
+
+======================================================================
+  Stage 5 — Merge (with anchor seeding)
+======================================================================
+Anchor seeds     : 6 (from top_anchors=['Amber Fort', 'Hawa Mahal', 'City Palace Jaipur', 'Jantar Mantar Jaipur', 'Lake Palace Udaipur', 'Mehrangarh Fort'])
+Total discoveries: 6  (anchors=6  yt=0  reddit=0  blog=0)
+
+======================================================================
+  Stage 5.5 — Geo brief (city circuit + distances + sun times)
+======================================================================
+2026-05-25 21:00:09,951 [INFO] app.llm.factory: [LLM] role=geo_planner                   provider=cerebras    model=qwen-3-235b-a22b-instruct-2507
+2026-05-25 21:00:15,434 [INFO] httpx: HTTP Request: POST https://api.cerebras.ai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-25 21:00:15,639 [INFO] httpx: HTTP Request: GET https://nominatim.openstreetmap.org/search?q=Jaipur%2C+Rajasthan%2C+India&format=json&limit=1 "HTTP/1.1 200 OK"
+2026-05-25 21:00:17,058 [INFO] httpx: HTTP Request: GET https://nominatim.openstreetmap.org/search?q=Jodhpur%2C+Rajasthan%2C+India&format=json&limit=1 "HTTP/1.1 200 OK"
+2026-05-25 21:00:18,298 [INFO] httpx: HTTP Request: GET https://nominatim.openstreetmap.org/search?q=Jaisalmer%2C+Rajasthan%2C+India&format=json&limit=1 "HTTP/1.1 200 OK"
+2026-05-25 21:00:20,563 [INFO] httpx: HTTP Request: GET https://nominatim.openstreetmap.org/search?q=Bikaner%2C+Rajasthan%2C+India&format=json&limit=1 "HTTP/1.1 200 OK"
+2026-05-25 21:00:20,565 [INFO] app.geo.planner: geo.brief dest='Rajasthan, India' cities=4 legs=3 sun=4 reordered=True
+=== Geography (verified — use this exact city order) ===
+City order: Jaipur → Bikaner → Jodhpur → Jaisalmer
+Inter-city legs (by road, approximate):
+  Jaipur → Bikaner: ~358 km (~7h10m)
+  Bikaner → Jodhpur: ~251 km (~5h1m)
+  Jodhpur → Jaisalmer: ~310 km (~6h12m)
+Sunrise / sunset (local, for time-of-day hooks):
+  Jaipur: sunrise 7:11, sunset 17:37
+  Bikaner: sunrise 7:23, sunset 17:45
+  Jodhpur: sunrise 7:21, sunset 17:50
+  Jaisalmer: sunrise 7:31, sunset 17:57
+Visit cities in the order above (it minimises backtracking). Cite the real distances/drive-times in transport_strategy, and use the sun times for sunrise/sunset hooks. Do NOT place a landmark in a city it isn't in.
+
+======================================================================
+  Stage 6 — Synthesizer (LLM call)
+======================================================================
+2026-05-25 21:00:20,565 [INFO] app.agents.synthesizer: synthesizer.start destination='Rajasthan, India' discoveries=6 candidates=6 days=11 pace=4
+2026-05-25 21:00:20,567 [INFO] app.agents.synthesizer: synthesizer.overlays=['regions/india', 'trip_shapes/region_multi_city', 'vibes/food_and_markets']
+2026-05-25 21:00:20,567 [INFO] app.llm.factory: [LLM] role=synthesizer                   provider=cerebras    model=qwen-3-235b-a22b-instruct-2507
+2026-05-25 21:00:20,568 [INFO] app.llm.factory: [LLM] role=synthesizer:fallback          provider=groq        model=llama-3.3-70b-versatile
+2026-05-25 21:00:20,606 [INFO] app.agents.synthesizer: [LLM] synthesizer → invoking  candidates=6  days=11
+2026-05-25 21:00:33,655 [INFO] httpx: HTTP Request: POST https://api.cerebras.ai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-25 21:00:34,421 [INFO] httpx: HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-25 21:00:34,422 [WARNING] app.agents.synthesizer: synthesizer.llm_call_failed: Could not parse response content as the length limit was reached - CompletionUsage(completion_tokens=32768, prompt_tokens=4453, total_tokens=37221, completion_tokens_details=CompletionTokensDetails(accepted_prediction_tokens=None, audio_tokens=None, reasoning_tokens=0, rejected_prediction_tokens=None), prompt_tokens_details=PromptTokensDetails(audio_tokens=None, cached_tokens=3840))
+2026-05-25 21:00:34,422 [WARNING] app.agents.synthesizer: synthesizer: LLM call returned None on attempt 1/2
+2026-05-25 21:00:34,422 [INFO] app.agents.synthesizer: synthesizer.overlays=['regions/india', 'trip_shapes/region_multi_city', 'vibes/food_and_markets']
+2026-05-25 21:00:34,423 [INFO] app.llm.factory: [LLM] role=synthesizer                   provider=cerebras    model=qwen-3-235b-a22b-instruct-2507
+2026-05-25 21:00:34,423 [INFO] app.llm.factory: [LLM] role=synthesizer:fallback          provider=groq        model=llama-3.3-70b-versatile
+2026-05-25 21:00:34,467 [INFO] app.agents.synthesizer: [LLM] synthesizer → invoking  candidates=6  days=11
+2026-05-25 21:00:34,816 [INFO] httpx: HTTP Request: POST https://api.cerebras.ai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-05-25 21:00:34,816 [INFO] openai._base_client: Retrying request to /chat/completions in 60.000000 seconds
+2026-05-25 21:01:41,668 [INFO] httpx: HTTP Request: POST https://api.cerebras.ai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-25 21:01:41,672 [INFO] app.agents.synthesizer: [LLM] synthesizer → returned  days=11  route='Jaipur (3) → Bikaner (2) → Jodhpur (3) → Jaisalmer (3)'
+2026-05-25 21:01:41,673 [INFO] app.agents.synthesizer: synthesizer.done attempt=2 days=11 stops=35 discoveries=6
+Days       : 11
+Total stops: 35
+Discoveries: 6
+Route      : Jaipur (3) → Bikaner (2) → Jodhpur (3) → Jaisalmer (3)
+Transport  : Travel between cities by private cab — reliable for long distances and group comfort. Use verified drive times: Jaipur → Bikaner (~7h10m), Bikaner → Jodhpur (~5h1m), Jodhpur → Jaisalmer (~6h12m). Within cities, hire auto-rickshaws or walk in old quarters. Book cabs in advance due to peak season demand.
+Stays      : {'Jaipur': 'Old City near Johari Bazaar — heritage haveli with courtyard rooms', 'Bikaner': 'Near Junagarh Fort — mid-range heritage guesthouse', 'Jodhpur': 'Blue City (Brahmpuri) — boutique haveli with rooftop views', 'Jaisalmer': 'Fort area or near Amar Sagar — heritage-style guesthouse with desert charm'}
+Budget     : ₹1,80,000–2,20,000 for two (includes stays, cabs, food, entry fees)
+Seasonal   : ['Peak season — book trains, hotels, and marquee experiences well ahead.', 'Nights get cold this time of year — pack layers/thermals, especially in desert or hill areas.']
+Stats      : places=0 tips=0 photo_stops=0
+
+--- Per-stop source breakdown ---
+  Day 1 #1   8:30 AM  (   maps)  Hawa Mahal
+  Day 1 #2  10:00 AM  (   maps)  Tripolia Bazaar
+  Day 1 #3  12:00 PM  (   maps)  City Palace Jaipur
+  Day 1 #4   4:00 PM  (   maps)  Jantar Mantar Jaipur
+  Day 2 #1   8:30 AM  (   maps)  Amber Fort
+  Day 2 #2  11:30 AM  (   maps)  Ganesh Talkies Market
+  Day 2 #3   1:00 PM  (   maps)  Johari Bazaar
+  Day 2 #4   5:15 PM  (   maps)  Nahargarh Fort viewpoint
+  Day 3 #1   9:30 AM  (   maps)  Sanganer
+  Day 3 #2  11:30 AM  (   maps)  Bagru
+  Day 3 #3   2:00 PM  (   maps)  Drive to Bikaner
+  Day 4 #1  11:00 AM  (   maps)  Junagarh Fort
+  Day 4 #2   1:30 PM  (   maps)  Lalgarh Palace
+  Day 4 #3   4:30 PM  (   maps)  Karni Cinema Market
+  Day 5 #1   8:30 AM  (   maps)  Karni Mata Temple
+  Day 5 #2  10:30 AM  (   maps)  Bikaner Camel Breeding Farm
+  Day 5 #3   3:00 PM  (   maps)  Drive to Jodhpur
+  Day 6 #1   4:30 PM  (   maps)  Clock Tower Market
+  Day 6 #2   5:00 PM  (   maps)  Brahmpuri (Blue City)
+  Day 6 #3   6:30 PM  (   maps)  Sardar Coffee House
+  Day 7 #1   9:00 AM  (   maps)  Mehrangarh Fort
+  Day 7 #2  12:30 PM  (   maps)  Jaswant Thada
+  Day 7 #3   2:00 PM  (   maps)  Mandore Gardens
+  Day 8 #1   9:00 AM  (   maps)  Old City Rickshaw Tour
+  Day 8 #2  11:30 AM  (   maps)  Sojati Gate Mojari Workshop
+  Day 8 #3   5:00 PM  (   maps)  Jodhpur Sweets
+  Day 9 #1   9:00 AM  (   maps)  Drive to Jaisalmer
+  Day 9 #2   5:30 PM  (   maps)  Jaisalmer Fort
+  Day 9 #3   7:30 PM  (   maps)  1st Gate Restaurant
+  Day 10 #1   1:00 PM  (   maps)  Lunch in Jaisalmer
+  Day 10 #2   4:00 PM  (   maps)  Sam Sand Dunes
+  Day 10 #3   6:30 PM  (   maps)  Desert Cultural Show
+  Day 11 #1   9:00 AM  (   maps)  Patwon Ki Haveli
+  Day 11 #2  11:00 AM  (   maps)  Jaisalmer Fort Bazaar
+  Day 11 #3   1:00 PM  (   maps)  Depart Jaisalmer
+
+--- Source totals across all stops ---
+     maps: 35
+
+======================================================================
+  Final AIItinerary JSON (stdout)
+======================================================================

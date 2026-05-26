@@ -284,6 +284,21 @@ def test_compute_stats_tips_only_counts_tips_used_as_stops() -> None:
     assert tips == 2  # only the two tips that surface as stops
 
 
+def test_compute_stats_counts_real_maps_anchors_excludes_filler() -> None:
+    # Honest filler-aware count: a real LLM-named maps anchor IS a place; planner
+    # padding (description sentinel) and generic labels are not.
+    from app.agents.synthesizer import _compute_stats, _default_anchor_stop
+
+    day = _build_day([
+        _stop(sort_order=1, name="Amber Fort", source="maps"),       # real anchor
+        _stop(sort_order=2, name="Mehrangarh Fort", source="maps"),  # real anchor
+        _default_anchor_stop(3, 2, "Jaipur"),                        # planner padding
+        _stop(sort_order=4, name="Cultural anchor", source="maps"),  # generic label
+    ])
+    places, _, _ = _compute_stats([day], discoveries=[])
+    assert places == 2  # two real forts; padding + "Cultural anchor" excluded
+
+
 def test_compute_stats_photo_stops_ignores_maps_stops() -> None:
     day = _build_day([
         _stop(sort_order=1, name="A", source="youtube", tags=["☕"]),
@@ -324,7 +339,7 @@ def test_llm_draft_maps_stops_to_candidates_by_title() -> None:
         for c in cands
     }
     draft = _LLMItineraryDraft(
-        emoji="🌴",
+        route_summary="Goa beaches → Panjim",
         days=[
             _llm_day(
                 day_number=1,
@@ -349,7 +364,7 @@ def test_llm_draft_maps_stops_to_candidates_by_title() -> None:
         ],
     )
     itin = _llm_draft_to_itinerary(draft, cands, discoveries_by_id, duration_days=1)
-    assert itin.emoji == "🌴"
+    assert itin.route_summary == "Goa beaches → Panjim"
     assert len(itin.days) == 1
     assert [s.source for s in itin.days[0].stops] == ["youtube", "reddit", "blog"]
     # Every stop should have non-empty tags, valid time, and a name.
@@ -584,7 +599,7 @@ async def test_run_synthesizer_happy_path_with_mocked_llm() -> None:
         _disc(title="Baga Beach", source="youtube"),
     ]
     fake_draft = _LLMItineraryDraft(
-        emoji="🌴",
+        route_summary="North Goa → South Goa",
         days=[
             _llm_day(
                 day_number=1,
@@ -886,3 +901,222 @@ def test_synth_prompt_says_target_is_upper_bound() -> None:
     assert "do not invent filler" in lowered or "do not pad" in lowered or (
         "never pad" in lowered
     )
+
+
+# ---------------------------------------------------------------------------
+# WS1 — personalization wiring (preferences / source weights / modifiers)
+# ---------------------------------------------------------------------------
+
+
+def test_build_prompt_includes_traveler_preferences() -> None:
+    """trip_params.preferences (the user's free-text) MUST reach the prompt.
+
+    Guards the WS1 fix for the defect where `preferences` was collected but
+    never passed to any agent or the synthesizer.
+    """
+    from app.agents.synthesizer import (
+        _build_prompt,
+        _dedupe_for_prompt,
+        _target_stop_counts,
+    )
+
+    trip = _trip(
+        preferences="we love local markets and street food, avoid touristy buffets"
+    )
+    signals = extract_signals(trip)
+    cands = _dedupe_for_prompt(
+        [_disc(title=f"Place {i}", source="youtube") for i in range(4)]
+    )
+    counts = _target_stop_counts(trip.duration_days, signals.pace_density)
+    _system, user = _build_prompt(trip, signals, cands, counts)
+    assert "local markets and street food" in user
+    assert "HIGHEST PRIORITY" in user
+
+
+def test_build_prompt_omits_preferences_block_when_empty() -> None:
+    from app.agents.synthesizer import (
+        _build_prompt,
+        _dedupe_for_prompt,
+        _target_stop_counts,
+    )
+
+    trip = _trip(preferences=None)
+    signals = extract_signals(trip)
+    cands = _dedupe_for_prompt(
+        [_disc(title=f"Place {i}", source="youtube") for i in range(4)]
+    )
+    counts = _target_stop_counts(trip.duration_days, signals.pace_density)
+    _system, user = _build_prompt(trip, signals, cands, counts)
+    assert "HIGHEST PRIORITY" not in user
+
+
+def test_signal_summary_surfaces_source_weights() -> None:
+    """vibe_source_weights MUST surface in the signal summary (WS1)."""
+    from app.agents.synthesizer import _format_signal_summary
+
+    trip = _trip(vibes=["budget", "backpacking"])  # reddit-leaning weights
+    signals = extract_signals(trip)
+    summary = _format_signal_summary(signals)
+    assert "Source emphasis" in summary
+    assert "reddit" in summary
+
+
+# ---------------------------------------------------------------------------
+# Tier 1 — signals-driven skill overlays + circuit/content prompt
+# ---------------------------------------------------------------------------
+
+
+def test_select_overlays_rajasthan_food_trip() -> None:
+    from app.agents.synthesizer import _select_overlays
+
+    trip = _trip(
+        destination="Rajasthan, India",
+        duration_days=10,
+        vibes=["heritage", "local cuisine"],
+        preferences="markets for shopping; prefer dhabas and thalis",
+    )
+    signals = extract_signals(trip)
+    overlays = _select_overlays(trip, signals)
+    assert "regions/india" in overlays
+    assert "trip_shapes/region_multi_city" in overlays
+    assert "vibes/food_and_markets" in overlays
+
+
+def test_select_overlays_single_city_non_food() -> None:
+    from app.agents.synthesizer import _select_overlays
+
+    trip = _trip(
+        destination="Paris, France",
+        duration_days=4,
+        vibes=["art", "architecture"],
+        preferences=None,
+    )
+    signals = extract_signals(trip)
+    overlays = _select_overlays(trip, signals)
+    # Not India, not a multi-city region keyword, no food/shopping vibe.
+    assert overlays == []
+
+
+def test_build_prompt_appends_selected_overlays() -> None:
+    from app.agents.synthesizer import (
+        _build_prompt,
+        _dedupe_for_prompt,
+        _target_stop_counts,
+    )
+
+    trip = _trip(
+        destination="Rajasthan, India",
+        duration_days=10,
+        vibes=["heritage", "local cuisine"],
+    )
+    signals = extract_signals(trip)
+    cands = _dedupe_for_prompt(
+        [_disc(title=f"Place {i}", source="youtube") for i in range(4)]
+    )
+    counts = _target_stop_counts(trip.duration_days, signals.pace_density)
+    system, _user = _build_prompt(trip, signals, cands, counts)
+    # Overlay text composed in, AND base prompt format fields resolved.
+    assert "Multi-city circuit" in system
+    assert "India playbook" in system
+    assert "{min_stops}" not in system  # base .format() ran
+
+
+def test_synth_prompt_has_route_and_content_rules() -> None:
+    """Prompt-contract guards for the Tier 1 additions."""
+    from app.agents.synthesizer import _SYNTH_SYSTEM
+
+    lowered = _SYNTH_SYSTEM.lower()
+    assert "route_summary" in lowered
+    assert "plan first" in lowered
+    assert "highlights" in lowered
+
+
+# ---------------------------------------------------------------------------
+# Tier 2 — trip-level fields (route/transport/stay/budget/seasonal)
+# ---------------------------------------------------------------------------
+
+
+def test_llm_draft_maps_trip_level_fields() -> None:
+    cands = _cands_for([("Anjuna", "youtube"), ("Baga", "reddit")])
+    by_id = {
+        c.discovery_ids[0]: ResearchDiscovery(
+            id=c.discovery_ids[0],
+            title=c.title,
+            body=c.body,
+            tags=c.tags,
+            source=c.sources[0],
+        )
+        for c in cands
+    }
+    trip = _trip()
+    signals = extract_signals(trip)
+    draft = _LLMItineraryDraft(
+        route_summary="North Goa (2) → South Goa (1)",
+        transport_strategy="Scooter in the north, taxi to the south.",
+        stay_by_city={"North Goa": "Assagao boutique guesthouse"},
+        budget_estimate="Rough INR 40-60k for 2",
+        days=[
+            _llm_day(
+                day_number=1,
+                stops=[
+                    _llm_stop(name="Anjuna", discovery_title="Anjuna", source="youtube"),
+                ],
+            )
+        ],
+    )
+    itin = _llm_draft_to_itinerary(
+        draft, cands, by_id, duration_days=1, signals=signals
+    )
+    assert itin.route_summary == "North Goa (2) → South Goa (1)"
+    assert itin.transport_strategy.startswith("Scooter")
+    assert itin.stay_by_city == {"North Goa": "Assagao boutique guesthouse"}
+    assert itin.budget_estimate == "Rough INR 40-60k for 2"
+    # seasonal_tips are deterministic (from signals), not the LLM draft.
+    assert itin.seasonal_tips == list(signals.seasonal_tips)
+    # emoji is gone entirely.
+    assert not hasattr(itin, "emoji")
+
+
+def test_build_prompt_includes_geo_brief_when_present() -> None:
+    from app.agents.synthesizer import (
+        _build_prompt,
+        _dedupe_for_prompt,
+        _target_stop_counts,
+    )
+    from app.geo import GeoBrief, GeoLeg
+
+    trip = _trip(destination="Rajasthan, India", duration_days=4)
+    signals = extract_signals(trip)
+    cands = _dedupe_for_prompt(
+        [_disc(title=f"Place {i}", source="youtube") for i in range(4)]
+    )
+    counts = _target_stop_counts(trip.duration_days, signals.pace_density)
+    brief = GeoBrief(
+        ordered_cities=["Jaipur", "Jodhpur"],
+        legs=[GeoLeg("Jaipur", "Jodhpur", 337, "~6h45m")],
+        sun={"Jaipur": ("7:13", "17:40")},
+    )
+    _system, user = _build_prompt(trip, signals, cands, counts, brief)
+    assert "Geography (verified" in user
+    assert "337 km" in user
+    # No geo block when brief is empty/None.
+    _system2, user2 = _build_prompt(trip, signals, cands, counts, None)
+    assert "Geography (verified" not in user2
+
+
+def test_llm_draft_coerces_stay_by_city_list_form() -> None:
+    # Small models sometimes emit stay_by_city as a list of objects.
+    draft = _LLMItineraryDraft.model_validate(
+        {
+            "route_summary": "x",
+            "stay_by_city": [
+                {"city": "Jaipur", "stay": "Bani Park heritage haveli"},
+                {"name": "Jodhpur", "area": "old blue city near clock tower"},
+            ],
+            "days": [],
+        }
+    )
+    assert draft.stay_by_city == {
+        "Jaipur": "Bani Park heritage haveli",
+        "Jodhpur": "old blue city near clock tower",
+    }

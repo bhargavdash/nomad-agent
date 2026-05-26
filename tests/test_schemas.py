@@ -110,7 +110,6 @@ def _valid_discoveries() -> list[ResearchDiscovery]:
 
 def test_ai_itinerary_accepts_valid_payload() -> None:
     itin = AIItinerary(
-        emoji="🧭",
         stats_places=3,
         stats_tips=2,
         stats_photo_stops=1,
@@ -164,7 +163,6 @@ def test_ai_itinerary_accepts_two_stops() -> None:
 def test_ai_itinerary_rejects_too_few_discoveries() -> None:
     with pytest.raises(ValidationError):
         AIItinerary(
-            emoji="🧭",
             stats_places=0,
             stats_tips=0,
             stats_photo_stops=0,

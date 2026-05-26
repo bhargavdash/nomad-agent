@@ -154,6 +154,10 @@ async def test_search_youtube_shorts_handles_empty_response(monkeypatch) -> None
 
 
 @pytest.mark.asyncio
-async def test_search_youtube_shorts_raises_without_api_key() -> None:
+async def test_search_youtube_shorts_raises_without_api_key(monkeypatch) -> None:
+    # Force the settings fallback to empty so the test is deterministic whether
+    # or not a local .env provides YOUTUBE_API_KEY (CI has none; dev usually
+    # does). Without this, `api_key=""` still falls back to settings.
+    monkeypatch.setattr(yt.settings, "YOUTUBE_API_KEY", "")
     with pytest.raises(RuntimeError, match="YOUTUBE_API_KEY"):
         await search_youtube_shorts("anything", api_key="")

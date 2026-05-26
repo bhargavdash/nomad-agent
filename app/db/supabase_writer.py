@@ -97,14 +97,13 @@ async def write_itinerary(trip_id: str, itinerary: AIItinerary) -> None:
     await asyncio.to_thread(_write)
 
 
-async def mark_trip_ready(trip_id: str, emoji: str, stats: dict[str, int]) -> None:
+async def mark_trip_ready(trip_id: str, stats: dict[str, int]) -> None:
     """Mark a trip as ready and store summary stats."""
 
     def _mark() -> None:
         client = _get_client()
         payload = {
             "status": "ready",
-            "emoji": emoji,
             "stats_places": stats.get("stats_places", 0),
             "stats_tips": stats.get("stats_tips", 0),
             "stats_photo_stops": stats.get("stats_photo_stops", 0),
@@ -112,6 +111,33 @@ async def mark_trip_ready(trip_id: str, emoji: str, stats: dict[str, int]) -> No
         client.table("trips").update(payload).eq("id", trip_id).execute()
 
     await asyncio.to_thread(_mark)
+
+
+async def update_trip_overview(trip_id: str, itinerary: AIItinerary) -> None:
+    """Write the Tier 2 trip-level planning surface onto the trips row.
+
+    Deliberately ISOLATED from `mark_trip_ready`: if these columns don't exist
+    yet (Prisma migration not run), this write fails on its own without
+    blocking the trip from going 'ready'. The caller wraps it in try/except so
+    a missing-column 400 is logged and skipped, not fatal.
+
+    Columns are snake_case (Postgres); they mirror nomad-api's Prisma `Trip`
+    fields routeSummary / transportStrategy / seasonalTips / stayByCity /
+    budgetEstimate via @map. `stay_by_city` is JSONB; `seasonal_tips` is text[].
+    """
+    payload = {
+        "route_summary": itinerary.route_summary,
+        "transport_strategy": itinerary.transport_strategy,
+        "seasonal_tips": itinerary.seasonal_tips,
+        "stay_by_city": itinerary.stay_by_city,
+        "budget_estimate": itinerary.budget_estimate,
+    }
+
+    def _write() -> None:
+        client = _get_client()
+        client.table("trips").update(payload).eq("id", trip_id).execute()
+
+    await asyncio.to_thread(_write)
 
 
 async def mark_trip_failed(trip_id: str, error_message: str) -> None:

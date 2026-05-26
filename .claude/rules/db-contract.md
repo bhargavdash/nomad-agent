@@ -14,7 +14,7 @@ Authoritative schema: [`nomad-api/prisma/schema.prisma`](../../../nomad-api/pris
 research_jobs         status / phase / progress / message / discoveries / stats / error / timestamps
 itinerary_days        per-day rows: trip_id, day_number, city, title, description, highlights, stop_count
 stops                 per-stop rows: day_id, trip_id, sort_order, time, ampm, duration, name, description, source, tags, locked
-trips                 status / emoji / stats_places / stats_tips / stats_photo_stops (we set status='ready' on success)
+trips                 status / stats_places / stats_tips / stats_photo_stops / route_summary / transport_strategy / seasonal_tips / stay_by_city / budget_estimate (we set status='ready' on success)
 ```
 
 Column names are **snake_case** in Postgres. Pydantic field names in `AIDay` / `AIStop` are **camelCase** (`dayNumber`, `sortOrder`, `ampm`) — they get translated by `supabase_writer.py` when writing. Don't change either side without changing both.

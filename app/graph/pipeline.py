@@ -34,7 +34,9 @@ from app.agents.reddit import run_reddit_agent
 from app.agents.synthesizer import run_synthesizer
 from app.agents.youtube_longform import run_youtube_longform_agent
 from app.agents.youtube_shorts import run_youtube_agent
+from app import cache
 from app.db import supabase_writer
+from app.geo import GeoBrief, build_geo_brief
 from app.schemas import AIItinerary, ResearchDiscovery, TripParams
 from app.signals import TravelSignals, enrich_anchor_hints, enrich_signals_with_llm, extract_signals
 
@@ -44,6 +46,10 @@ logger = logging.getLogger(__name__)
 class PipelineState(TypedDict, total=False):
     trip_params: TripParams
     signals: TravelSignals
+    geo_brief: GeoBrief
+    # L1 cache (Milestone C): cached destination research pool on a HIT, None on
+    # a miss. Set by research_gate; read by the research nodes (to no-op) + merge.
+    research_cache: list[ResearchDiscovery] | None
     yt_discoveries: list[ResearchDiscovery]
     yt_longform_discoveries: list[ResearchDiscovery]
     reddit_discoveries: list[ResearchDiscovery]
@@ -61,20 +67,56 @@ async def signal_node(state: PipelineState) -> dict[str, Any]:
     logger.info("[NODE] signals → starting")
     signals = extract_signals(state["trip_params"])
     signals = await enrich_signals_with_llm(signals, state["trip_params"])
-    await enrich_anchor_hints(signals, state["trip_params"].destination)
+    # NOTE: anchor-hint enrichment (an LLM call) moved to research_gate so it
+    # only runs on a cache MISS — on a HIT the cached pool already has anchors.
     logger.info(
-        "[NODE] signals → done  region=%s season=%s crowd=%s budget=%s anchors=%d  (%.1fs)",
+        "[NODE] signals → done  region=%s season=%s crowd=%s budget=%s  (%.1fs)",
         signals.region,
         signals.season,
         signals.crowd_level,
         signals.budget_tier,
-        len(signals.top_anchors or []),
         time.perf_counter() - t0,
     )
     return {"signals": signals}
 
 
+async def research_gate_node(state: PipelineState) -> dict[str, Any]:
+    """L1 cache gate. On HIT, set research_cache so the research agents no-op and
+    merge uses the cached pool. On MISS, run the (LLM) anchor enrichment that the
+    research path needs, and signal the agents to run."""
+    destination = state["trip_params"].destination
+    cached = await cache.get_cached_research(destination)
+    if cached is not None:
+        logger.info(
+            "[NODE] research_gate → CACHE HIT n=%d (skipping research agents)",
+            len(cached),
+        )
+        return {"research_cache": cached}
+    logger.info("[NODE] research_gate → cache miss (running research)")
+    # Anchors are only needed when we actually research (they get baked into the
+    # cached pool). Skipping on hit also avoids an extra LLM call.
+    await enrich_anchor_hints(state["signals"], destination)
+    return {"research_cache": None}
+
+
+async def geo_node(state: PipelineState) -> dict[str, Any]:
+    t0 = time.perf_counter()
+    logger.info("[NODE] geo → starting")
+    brief = await build_geo_brief(state["trip_params"], state["signals"])
+    logger.info(
+        "[NODE] geo → done  cities=%d legs=%d sun=%d reordered=%s  (%.1fs)",
+        len(brief.ordered_cities),
+        len(brief.legs),
+        len(brief.sun),
+        brief.reordered,
+        time.perf_counter() - t0,
+    )
+    return {"geo_brief": brief}
+
+
 async def youtube_node(state: PipelineState) -> dict[str, Any]:
+    if state.get("research_cache") is not None:
+        return {"yt_discoveries": []}  # cache hit — skip the API/LLM work
     t0 = time.perf_counter()
     logger.info("[NODE] youtube_shorts → starting")
     discoveries = await run_youtube_agent(state["trip_params"], state["signals"])
@@ -83,6 +125,8 @@ async def youtube_node(state: PipelineState) -> dict[str, Any]:
 
 
 async def youtube_longform_node(state: PipelineState) -> dict[str, Any]:
+    if state.get("research_cache") is not None:
+        return {"yt_longform_discoveries": []}  # cache hit — skip
     t0 = time.perf_counter()
     logger.info("[NODE] youtube_longform → starting")
     discoveries = await run_youtube_longform_agent(
@@ -93,6 +137,8 @@ async def youtube_longform_node(state: PipelineState) -> dict[str, Any]:
 
 
 async def reddit_node(state: PipelineState) -> dict[str, Any]:
+    if state.get("research_cache") is not None:
+        return {"reddit_discoveries": []}  # cache hit — skip
     t0 = time.perf_counter()
     logger.info("[NODE] reddit → starting")
     discoveries = await run_reddit_agent(state["trip_params"], state["signals"])
@@ -101,6 +147,8 @@ async def reddit_node(state: PipelineState) -> dict[str, Any]:
 
 
 async def google_node(state: PipelineState) -> dict[str, Any]:
+    if state.get("research_cache") is not None:
+        return {"google_discoveries": []}  # cache hit — skip
     t0 = time.perf_counter()
     logger.info("[NODE] google_blog → starting")
     discoveries = await run_google_blog_agent(state["trip_params"], state["signals"])
@@ -110,6 +158,27 @@ async def google_node(state: PipelineState) -> dict[str, Any]:
 
 async def merge_node(state: PipelineState) -> dict[str, Any]:
     t0 = time.perf_counter()
+    destination = state["trip_params"].destination
+
+    # --- L1 cache HIT: use the cached pool, skip concat/seed/cache-write. ------
+    cached = state.get("research_cache")
+    if cached is not None:
+        all_discoveries = cached
+        if all_discoveries:
+            chunk_size = max(1, min(5, len(all_discoveries) // 2))
+            try:
+                await supabase_writer.write_discoveries(
+                    state["trip_params"].trip_id, all_discoveries[:chunk_size]
+                )
+            except Exception:  # noqa: BLE001
+                logger.warning("merge_node: mid-flight write failed (cache hit)", exc_info=True)
+        logger.info(
+            "[NODE] merge → CACHE HIT  all_discoveries=%d  (%.1fs)",
+            len(all_discoveries), time.perf_counter() - t0,
+        )
+        return {"all_discoveries": all_discoveries}
+
+    # --- L1 cache MISS: concat research, seed anchors, then cache the pool. ----
     yt = state.get("yt_discoveries", []) or []
     ytl = state.get("yt_longform_discoveries", []) or []
     red = state.get("reddit_discoveries", []) or []
@@ -127,7 +196,6 @@ async def merge_node(state: PipelineState) -> dict[str, Any]:
     # Pre-seed canonical anchor stops to bypass the extraction LLM's vibe bias.
     # Only add seeds for anchors not already covered by real research (fuzzy match).
     existing_lower = {d.title.lower() for d in merged}
-    destination = state["trip_params"].destination
     anchor_seeds: list[ResearchDiscovery] = []
     for name in (state["signals"].top_anchors or []):
         name_lower = name.lower()
@@ -141,7 +209,7 @@ async def merge_node(state: PipelineState) -> dict[str, Any]:
                     id=str(uuid.uuid4()),
                     title=name,
                     body=(
-                        f"{name} — a must-visit landmark in {destination}. "
+                        f"{name} — a well-known landmark in {destination}. "
                         "Pre-validated anchor stop. Check local advisories for opening hours."
                     ),
                     source="maps",
@@ -173,6 +241,9 @@ async def merge_node(state: PipelineState) -> dict[str, Any]:
                 exc_info=True,
             )
 
+    # Cache the freshly-researched pool for this destination (best-effort).
+    await cache.set_cached_research(destination, all_discoveries)
+
     logger.info(
         "[NODE] merge → done  anchors_seeded=%d  all_discoveries=%d  (%.1fs)",
         len(anchor_seeds),
@@ -190,6 +261,7 @@ async def synthesizer_node(state: PipelineState) -> dict[str, Any]:
         state["trip_params"],
         state["signals"],
         all_disc,
+        state.get("geo_brief"),
     )
     logger.info(
         "[NODE] synthesizer → done  days=%d  places=%d  tips=%d  photo=%d  (%.1fs)",
@@ -209,6 +281,8 @@ def build_graph():
     g = StateGraph(PipelineState)
 
     g.add_node("signals", signal_node)
+    g.add_node("geo", geo_node)
+    g.add_node("research_gate", research_gate_node)
     g.add_node("youtube", youtube_node)
     g.add_node("youtube_longform", youtube_longform_node)
     g.add_node("reddit", reddit_node)
@@ -218,11 +292,16 @@ def build_graph():
 
     g.add_edge(START, "signals")
 
-    # Fan-out from signals to the 4 research agents in parallel.
-    g.add_edge("signals", "youtube")
-    g.add_edge("signals", "youtube_longform")
-    g.add_edge("signals", "reddit")
-    g.add_edge("signals", "google")
+    # geo runs in parallel with the research path (both after signals).
+    g.add_edge("signals", "geo")
+
+    # research_gate (L1 cache) gates the 4 research agents. On a cache hit it
+    # sets research_cache so the agents no-op and merge uses the cached pool.
+    g.add_edge("signals", "research_gate")
+    g.add_edge("research_gate", "youtube")
+    g.add_edge("research_gate", "youtube_longform")
+    g.add_edge("research_gate", "reddit")
+    g.add_edge("research_gate", "google")
 
     # Fan-in to merge — LangGraph waits for all incoming edges.
     g.add_edge("youtube", "merge")
@@ -230,7 +309,9 @@ def build_graph():
     g.add_edge("reddit", "merge")
     g.add_edge("google", "merge")
 
+    # Synthesizer waits for BOTH merge (discoveries) and geo (the geo brief).
     g.add_edge("merge", "synthesizer")
+    g.add_edge("geo", "synthesizer")
     g.add_edge("synthesizer", END)
 
     return g.compile()

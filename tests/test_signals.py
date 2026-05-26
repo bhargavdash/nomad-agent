@@ -34,6 +34,46 @@ def _trip(**overrides) -> TripParams:
 
 
 # ---------------------------------------------------------------------------
+# Seasonal tips (Tier 1) — deterministic practical tips, not hazards.
+# ---------------------------------------------------------------------------
+
+
+def test_seasonal_tips_rajasthan_december() -> None:
+    # Peak winter trip → "book ahead" + "cold nights / layers".
+    trip = _trip(
+        destination="Rajasthan, India",
+        date_from="2026-12-20",
+        date_to="2026-12-31",
+        vibes=["heritage"],
+    )
+    sig = extract_signals(trip)
+    joined = " ".join(sig.seasonal_tips).lower()
+    assert sig.seasonal_tips, "expected seasonal tips for a Dec Rajasthan trip"
+    assert "book" in joined and ("cold" in joined or "layers" in joined)
+
+
+def test_seasonal_tips_empty_for_temperate_shoulder() -> None:
+    # Europe shoulder season → no peak/cold/monsoon/heat tip fires.
+    trip = _trip(
+        destination="Paris, France",
+        date_from="2026-04-10",
+        date_to="2026-04-17",
+        vibes=["art"],
+    )
+    sig = extract_signals(trip)
+    assert sig.seasonal_tips == []
+
+
+def test_currency_hint_by_destination() -> None:
+    assert extract_signals(_trip(destination="Rajasthan, India")).currency_hint == "INR (₹)"
+    assert extract_signals(_trip(destination="Paris, France")).currency_hint == "EUR (€)"
+    assert extract_signals(_trip(destination="Bangkok, Thailand")).currency_hint == "THB (฿)"
+    assert extract_signals(_trip(destination="London, UK")).currency_hint == "GBP (£)"
+    # Unknown / ambiguous → None (synthesizer infers from the destination).
+    assert extract_signals(_trip(destination="Atlantis")).currency_hint is None
+
+
+# ---------------------------------------------------------------------------
 # Existing (back-compat) tests — kept passing.
 # ---------------------------------------------------------------------------
 

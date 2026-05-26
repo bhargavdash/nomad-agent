@@ -1,0 +1,33 @@
+name: CI
+
+# Minimal gate so an "obvious break" (e.g. the _coerce_time regression that
+# crashed all synthesis) can never reach main again. No secrets are exposed:
+# the unit suite mocks every LLM/tool/network call and runs in a few seconds.
+# mypy is intentionally omitted until the pre-existing type errors are cleaned
+# up in their own sweep (see IMPROVEMENT_PLAN.md / HANDOFF.md).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Lint (ruff)
+        run: uv run ruff check app
+
+      - name: Unit tests
+        run: uv run pytest -q

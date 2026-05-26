@@ -45,6 +45,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.llm.factory import get_llm
 from app.schemas import ResearchDiscovery, TripParams
 from app.signals import TravelSignals
+from app.skills import load_skill
 from app.tools.reddit import (
     RedditPost,
     enrich_with_comments,
@@ -166,6 +167,27 @@ _VAGUE_INSIGHT_RE = re.compile(
 )
 
 MIN_INSIGHT_LENGTH = 40
+
+# Irrelevant / non-actionable negativity. Reddit threads about a destination are
+# full of health-anxiety, political grievances, and generic country-bashing that
+# are NOT itinerary-actionable — the "you might get kidney stones" / "so much
+# corruption" class flagged in the Rajasthan benchmark (it leaked into Day 1).
+# Kept high-precision so genuine, actionable warnings survive: a NAMED scam at a
+# NAMED place, snow closures, monsoon flooding, etc. don't match these tokens.
+_IRRELEVANT_NEGATIVITY_RE = re.compile(
+    r"\bkidney\s+stones?\b"
+    r"|\bcorrupt(?:ion)?\b"
+    r"|\bbribe(?:s|ry)?\b"
+    r"|\bdelhi\s+belly\b"
+    r"|\btravell?er'?s?\s+diarr?h?oea\b"
+    r"|\byou'?ll?\s+get\s+sick\b"
+    r"|\bso\s+(?:dirty|filthy)\b"
+    r"|\b(?:poverty|beggars?|slums?)\b"
+    r"|\bthird[-\s]world\b"
+    r"|\b(?:modi|bjp|congress\s+party|hindu[-\s]muslim|communal|riots?)\b"
+    r"|\bscams?\s+everywhere\b",
+    re.IGNORECASE,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -491,45 +513,7 @@ def _filter_posts(
 # ---------------------------------------------------------------------------
 
 
-_REDDIT_SYSTEM = """You extract concrete traveler insights from Reddit threads about a single destination.
-
-Reddit threads carry signal that guidebooks and YouTube videos miss: warnings, scam alerts, contrarian "skip X go Y" recommendations, road/weather conditions, neighbourhood-level granularity, locals correcting outdated advice, and hyper-local food tips. Your job is to surface that signal.
-
-You are given 8-12 posts (title + body + top comments). Each post will typically yield 0-2 insights. AIM TO RETURN 5-8 INSIGHTS overall. If you return fewer than 3 you are almost certainly being too strict — extract what's there.
-
-DESTINATION SPECIFICITY (CRITICAL):
-- Only extract insights specifically about {destination}.
-- Many posts are pan-region trip reports that mention many places. For those, extract ONLY the {destination}-specific paragraphs/sentences. Ignore tangents about other places.
-- If a post is not primarily about {destination} (e.g. discusses India broadly when {destination} is "Manali"), return nothing for that post — don't try to salvage a generic tip.
-- Every `topic` MUST be tied to {destination}, a named sub-area of it, or a named feature inside it (a road, neighbourhood, hostel, dish, viewpoint, festival). Generic country-wide tips ("Indian public toilets", "Indian SIM cards") do NOT belong here.
-
-WHAT COUNTS AS AN INSIGHT (lenient within destination scope — extract liberally):
-- Any specific place / road / neighborhood / hostel / dish / cafe / route mentioned with even a sentence of context.
-- Any practical advice with a number, date, or named thing (price, route, season, transport mode).
-- Any "skip X / go Y" contrarian recommendation.
-- Any warning about scams, weather, road conditions, illness, theft, etc.
-
-`topic`: a SHORT label naming the specific thing — a proper noun or named situation. Examples:
-  GOOD:  "Manali-Leh highway in July", "Old Manali cafés", "Solang Valley paragliding scams",
-         "Sleeper bus from Delhi to Manali", "Hadimba Temple", "Kasol vs Manali".
-  BAD:   "beaches", "safety", "food", "transport", "things to avoid", "general tips",
-         "Indian SIM cards" (not destination-tied), "RPO Chandigarh passport surrender".
-If the topic feels generic, prefix it with a place ("Manali bus station scams" not "scams").
-
-`insight`: 1-3 sentences in Reddit's voice, grounded in what the posts actually say.
-  - Quote / paraphrase the actual claim. Don't soften it into a guidebook line.
-  - Include the concrete detail (which neighborhood, what month, what price).
-  - AVOID generic phrasing: "be careful", "be aware", "must-visit", "vibrant culture",
-    "good vibes", "great experience", "stunning views". These are auto-rejected downstream.
-
-`category`: 'warning' / 'tip' / 'recommendation'.
-
-`evidence_post_indices`: the post indices [N] that actually support this — only what's in the input.
-  Don't invent indices.
-
-`confidence`: 'high' if 3+ posts mention it, 'medium' if 2, 'low' if 1.
-
-OUTPUT: JSON {{"insights": [...]}}. TARGET 5-8 insights when the posts have content. Returning 0 from a 10-post batch is failure mode IF the posts are actually about {destination} — re-read and extract anything specific. If most posts turn out to be off-topic for {destination}, returning 0-2 is correct."""
+_REDDIT_SYSTEM = load_skill("reddit_research")
 
 
 def _format_posts_for_prompt(posts: list[RedditPost]) -> str:
@@ -630,6 +614,16 @@ def _validate_and_dedupe(
             logger.info(
                 "reddit.validate.drop reason=vague phrase=%r topic=%r",
                 vmatch.group(0), ins.topic,
+            )
+            continue
+        # Drop non-actionable negativity (health scares, corruption, politics,
+        # generic country-bashing). Checks topic + body so "kidney stones in
+        # Rajasthan" is dropped whether the phrase lands in the title or body.
+        nmatch = _IRRELEVANT_NEGATIVITY_RE.search(f"{ins.topic} {body}")
+        if nmatch:
+            logger.info(
+                "reddit.validate.drop reason=irrelevant_negativity phrase=%r topic=%r",
+                nmatch.group(0), ins.topic,
             )
             continue
         valid_indices = [i for i in ins.evidence_post_indices if 1 <= i <= n_posts]

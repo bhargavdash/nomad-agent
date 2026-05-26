@@ -241,6 +241,53 @@ def test_validate_dedupes_by_topic_keeps_best() -> None:
     assert survivors[0].confidence == "high"
 
 
+def test_validate_drops_irrelevant_negativity() -> None:
+    """WS3: health scares / corruption / generic grievances are dropped.
+
+    Reproduces the Rajasthan benchmark leak where 'summer heat can trigger
+    kidney stones' surfaced into Day 1. Actionable, place-tied warnings survive.
+    """
+    extracted = [
+        _ins(
+            topic="Rajasthan summer heat",
+            insight=(
+                "Be ready — the summer heat wave in Rajasthan can trigger "
+                "kidney stones if you don't drink enough water."
+            ),
+        ),
+        _ins(
+            topic="Police checkpoints",
+            insight=(
+                "There is so much corruption everywhere, the police will ask "
+                "for a bribe at every checkpoint."
+            ),
+        ),
+        # Actionable, named-place warning — MUST survive.
+        _ins(
+            topic="Rohtang Pass road in July",
+            insight=(
+                "The Manali-Leh highway near Rohtang gets blocked by landslides "
+                "in July; convoys delayed 6+ hours — start before 5am."
+            ),
+        ),
+    ]
+    survivors = _validate_and_dedupe(extracted, n_posts=5)
+    topics = {d.topic for d in survivors}
+    assert "Rajasthan summer heat" not in topics
+    assert "Police checkpoints" not in topics
+    assert "Rohtang Pass road in July" in topics
+
+
+def test_reddit_prompt_documents_exclusions() -> None:
+    """Static prompt-contract guard for the WS3 exclusion rules."""
+    from app.agents.reddit import _REDDIT_SYSTEM
+
+    lowered = _REDDIT_SYSTEM.lower()
+    assert "do not extract" in lowered
+    assert "kidney stones" in lowered
+    assert "different season" in lowered
+
+
 # ---------------------------------------------------------------------------
 # Schema coercion (small models often emit malformed JSON shapes)
 # ---------------------------------------------------------------------------

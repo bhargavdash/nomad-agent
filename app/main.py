@@ -13,7 +13,9 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 
-from app.routes.research import router as research_router
+# Import routers AFTER logging.basicConfig so logging is configured before any
+# transitive module-level logger setup runs. (E402 is intentional here.)
+from app.routes.research import router as research_router  # noqa: E402
 
 app = FastAPI(
     title="nomad-agent",

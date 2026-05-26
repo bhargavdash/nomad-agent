@@ -7,8 +7,10 @@ are read from config (env vars) so swapping models is a one-line change.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from langchain_core.language_models import BaseChatModel
+from langchain_core.runnables import Runnable
 
 from app.config import settings
 
@@ -30,12 +32,34 @@ def _resolve_role(role: str) -> tuple[str, str]:
             settings.LLM_SIGNALS_CLASSIFIER_PROVIDER,
             settings.LLM_SIGNALS_CLASSIFIER_MODEL,
         ),
+        "geo_planner": (
+            settings.LLM_GEO_PLANNER_PROVIDER,
+            settings.LLM_GEO_PLANNER_MODEL,
+        ),
     }
     if role not in mapping:
         raise ValueError(
             f"Unknown LLM role: {role!r}. Expected one of {list(mapping)}."
         )
     return mapping[role]
+
+
+def _resolve_fallback(role: str) -> tuple[str, str] | None:
+    """Return (provider, model) for a role's fallback, or None if none configured.
+
+    Only the synthesizer has a fallback today (Cerebras-235B primary → Groq-70B
+    fallback) so a free-tier queue/error never becomes a hard failure. Returns
+    None when no fallback is set or when it would duplicate the primary.
+    """
+    if role != "synthesizer":
+        return None
+    provider = settings.LLM_SYNTH_FALLBACK_PROVIDER
+    model = settings.LLM_SYNTH_FALLBACK_MODEL
+    if not provider or not model:
+        return None
+    if (provider, model) == _resolve_role(role):
+        return None  # fallback identical to primary — pointless
+    return provider, model
 
 
 def get_llm(role: str) -> BaseChatModel:
@@ -45,6 +69,11 @@ def get_llm(role: str) -> BaseChatModel:
           | "google_agent" | "synthesizer" | "signals_classifier".
     """
     provider, model = _resolve_role(role)
+    return _build_llm(provider, model, role=role)
+
+
+def _build_llm(provider: str, model: str, *, role: str = "?") -> BaseChatModel:
+    """Instantiate a LangChain chat model for an explicit (provider, model)."""
     provider = provider.lower()
     logger.info("[LLM] role=%-28s  provider=%-10s  model=%s", role, provider, model)
 
@@ -113,13 +142,61 @@ def get_llm(role: str) -> BaseChatModel:
             raise RuntimeError(
                 "CEREBRAS_API_KEY is not set but provider 'cerebras' was requested."
             )
+        # timeout + bounded retries so a peak-time queue-block fails fast to the
+        # Groq fallback (see get_structured_llm) rather than hanging the request.
         return ChatOpenAI(
             model=model,
             api_key=settings.CEREBRAS_API_KEY,
             base_url="https://api.cerebras.ai/v1",
+            timeout=settings.LLM_CEREBRAS_TIMEOUT_SECONDS,
+            max_retries=settings.LLM_CEREBRAS_MAX_RETRIES,
         )
 
     raise ValueError(
         f"Unknown LLM provider: {provider!r}. "
         "Expected one of: groq, openai, anthropic, google, together, kimi, cerebras."
     )
+
+
+def _apply_structured(llm: BaseChatModel, schema: Any, method: str | None) -> Runnable:
+    """Apply structured output, trying `method` first then the provider default.
+
+    Providers vary in support for the `method` kwarg (e.g. json_mode); when it
+    raises at construction, fall back to the default so we never hard-fail on a
+    kwarg mismatch.
+    """
+    if method is not None:
+        try:
+            return llm.with_structured_output(schema, method=method)
+        except Exception:  # noqa: BLE001
+            pass
+    return llm.with_structured_output(schema)
+
+
+def get_structured_llm(
+    role: str, schema: Any, *, method: str | None = None
+) -> Runnable:
+    """Return a structured-output runnable for `role`, with provider fallback.
+
+    Equivalent to ``get_llm(role).with_structured_output(schema, method=...)``
+    but, when the role defines a fallback (see ``_resolve_fallback``), the
+    returned runnable transparently retries on the fallback provider if the
+    primary errors at invocation time. This is what lets the synthesizer use
+    Cerebras-235B as primary without losing reliability when the free tier
+    queues — Groq-70B picks up. Callers still handle a final failure (the
+    synthesizer degrades to its deterministic skeleton).
+    """
+    primary = _apply_structured(get_llm(role), schema, method)
+    fallback = _resolve_fallback(role)
+    if fallback is None:
+        return primary
+    fb_provider, fb_model = fallback
+    try:
+        fb_llm = _build_llm(fb_provider, fb_model, role=f"{role}:fallback")
+    except Exception as e:  # noqa: BLE001
+        # Fallback misconfigured (e.g. missing key) — run primary-only.
+        logger.warning(
+            "get_structured_llm: fallback unavailable for role=%s: %s", role, e
+        )
+        return primary
+    return primary.with_fallbacks([_apply_structured(fb_llm, schema, method)])

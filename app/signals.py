@@ -58,6 +58,16 @@ class TravelSignals:
     # User-visible warnings (rendered in UI, e.g. "Monsoon — many beaches closed")
     warnings: list[str] = field(default_factory=list)
 
+    # Soft, deterministic practical tips for the trip's season (not risks —
+    # "pack layers, Dec nights are cold", "peak season, book ahead"). The
+    # synthesizer weaves these into the itinerary the way a good human planner
+    # would. Distinct from `warnings`, which are hazards surfaced on Day 1.
+    seasonal_tips: list[str] = field(default_factory=list)
+
+    # Local currency for budget figures, e.g. "INR (₹)". None when ambiguous —
+    # the synthesizer is then told to infer it from the destination.
+    currency_hint: str | None = None
+
     # Canonical must-visit landmarks seeded by LLM, independent of vibe-extraction.
     top_anchors: list[str] = field(default_factory=list)
 
@@ -469,6 +479,80 @@ def _build_warnings(season: str, region: str, destination_lower: str, weather_hi
     return warnings
 
 
+def _build_seasonal_tips(
+    season: str, region: str, month: int | None, destination_lower: str
+) -> list[str]:
+    """Soft, deterministic practical tips for the trip's season (not hazards).
+
+    These mirror what a good human planner volunteers — "book ahead in peak
+    season", "Dec nights are cold, pack layers" — and give the synthesizer
+    concrete practical content to weave in (the GPT-5.5 benchmark surfaced
+    exactly these). Pure function of season/region/month; no I/O.
+    """
+    tips: list[str] = []
+    cold_now = month in (11, 12, 1, 2)
+    is_hill = any(k in destination_lower for k in _HILL_STATION_KEYWORDS)
+
+    if season in ("peak", "very_peak"):
+        tips.append(
+            "Peak season — book trains, hotels, and marquee experiences well ahead."
+        )
+    if cold_now and (region == "india" or is_hill):
+        tips.append(
+            "Nights get cold this time of year — pack layers/thermals, "
+            "especially in desert or hill areas."
+        )
+    if season == "monsoon":
+        tips.append(
+            "Monsoon — carry rain gear; expect occasional road or attraction "
+            "closures on heavy-rain days."
+        )
+    if season == "summer" and region == "india":
+        tips.append(
+            "Midday heat is intense — front-load sightseeing to early morning "
+            "and rest through midday."
+        )
+    return tips
+
+
+# Destination-keyword → local currency. Multi-currency regions (Europe, SEA,
+# Americas, Oceania) need country-level overrides; India is unambiguous by
+# region. Anything not matched returns None and the synthesizer infers it.
+_CURRENCY_OVERRIDES: dict[str, str] = {
+    "thailand": "THB (฿)", "bangkok": "THB (฿)", "phuket": "THB (฿)",
+    "japan": "JPY (¥)", "tokyo": "JPY (¥)",
+    "vietnam": "VND (₫)", "hanoi": "VND (₫)", "ho chi minh": "VND (₫)",
+    "singapore": "SGD (S$)",
+    "indonesia": "IDR (Rp)", "bali": "IDR (Rp)",
+    "malaysia": "MYR (RM)", "kuala lumpur": "MYR (RM)",
+    "philippines": "PHP (₱)", "manila": "PHP (₱)",
+    "sri lanka": "LKR (Rs)",
+    "uk": "GBP (£)", "london": "GBP (£)", "england": "GBP (£)", "scotland": "GBP (£)",
+    "switzerland": "CHF", "zurich": "CHF", "geneva": "CHF",
+    "usa": "USD ($)", "united states": "USD ($)", "new york": "USD ($)",
+    "nyc": "USD ($)", "los angeles": "USD ($)", "san francisco": "USD ($)",
+    "canada": "CAD (C$)", "toronto": "CAD (C$)", "vancouver": "CAD (C$)",
+    "mexico": "MXN ($)", "cancun": "MXN ($)",
+    "australia": "AUD (A$)", "sydney": "AUD (A$)", "melbourne": "AUD (A$)",
+    "new zealand": "NZD (NZ$)", "auckland": "NZD (NZ$)", "queenstown": "NZD (NZ$)",
+}
+
+
+def _currency_hint(region: str, destination_lower: str) -> str | None:
+    """Local currency for budget figures. India is unambiguous by region;
+    multi-currency regions use country overrides; Eurozone defaults to EUR.
+    Returns None when unknown so the synthesizer infers from the destination."""
+    if region == "india":
+        return "INR (₹)"
+    for keyword, currency in _CURRENCY_OVERRIDES.items():
+        if keyword in destination_lower:
+            return currency
+    if region == "europe":
+        # UK / Switzerland already handled above; default the rest to euro.
+        return "EUR (€)"
+    return None
+
+
 def _build_query_modifiers(
     base: list[str],
     season: str,
@@ -559,6 +643,8 @@ def extract_signals(trip_params: TripParams) -> TravelSignals:
         season_modifiers, season, crowd_level, festivals, trip_params.vibes
     )
     warnings = _build_warnings(season, region, destination_lower, weather_hint)
+    seasonal_tips = _build_seasonal_tips(season, region, month, destination_lower)
+    currency_hint = _currency_hint(region, destination_lower)
 
     return TravelSignals(
         region=region,
@@ -573,6 +659,8 @@ def extract_signals(trip_params: TripParams) -> TravelSignals:
         vibe_source_weights=vibe_source_weights,
         query_modifiers=query_modifiers,
         warnings=warnings,
+        seasonal_tips=seasonal_tips,
+        currency_hint=currency_hint,
     )
 
 
@@ -821,6 +909,8 @@ async def enrich_signals_with_llm(
         season_modifiers, season, crowd_level, festivals, trip_params.vibes
     )
     warnings = _build_warnings(season, classification.region, dest_key, weather_hint)
+    seasonal_tips = _build_seasonal_tips(season, classification.region, month, dest_key)
+    currency_hint = _currency_hint(classification.region, dest_key)
 
     logger.info(
         "signals.llm_enriched dest=%r region=%s hemisphere=%s season=%s",
@@ -843,4 +933,6 @@ async def enrich_signals_with_llm(
         vibe_source_weights=signals.vibe_source_weights,
         query_modifiers=query_modifiers,
         warnings=warnings,
+        seasonal_tips=seasonal_tips,
+        currency_hint=currency_hint,
     )

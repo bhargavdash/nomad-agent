@@ -41,7 +41,8 @@ from typing import Any, Literal
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from app.llm.factory import get_llm
+from app.geo import GeoBrief
+from app.llm.factory import get_structured_llm
 from app.schemas import (
     AIDay,
     AIItinerary,
@@ -51,6 +52,7 @@ from app.schemas import (
     TripParams,
 )
 from app.signals import TravelSignals
+from app.skills import load_skill
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +92,40 @@ _PHOTO_TAG_TOKENS = {
     "photo", "photogenic", "view", "viewpoint", "sunset", "sunrise",
     "scenic", "vista", "lookout", "instagram",
 }
+
+# Filler-stop detection (honest stats). A stop counts as a real "place"
+# regardless of its source — so a real, LLM-named maps anchor ("Amber Fort",
+# "Ambrai") IS a place — UNLESS it's planner padding or a generic use-case
+# label. Two signals: the planner-placeholder description sentinel (from
+# `_default_anchor_stop`), and the generic banned-label names (rule 14) the LLM
+# occasionally emits anyway. This replaces the old `source == "maps"` proxy,
+# which wrongly discarded real anchors and undercounted the stats badges.
+_PLANNER_PLACEHOLDER_MARK = "suggested by the planner"
+_FILLER_NAME_PREFIXES = (
+    "morning coffee in ", "lunch in ", "dinner in ", "breakfast in ", "brunch in ",
+    "sunset point near ", "evening walk through ",
+)
+_FILLER_NAME_EXACT = {
+    "cultural anchor", "cultural exploration", "cultural spot", "cultural place",
+    "standard anchor", "anchor slot", "local eatery", "local breakfast spot",
+    "local market", "local food", "local cuisine", "neighborhood walk",
+    "neighbourhood walk", "pool time", "relaxation time", "free time",
+    "sunset viewpoint", "evening stroll", "dinner spot", "lunch spot",
+    "breakfast spot",
+}
+_FILLER_OLD_MARKET_RE = re.compile(r"^old\s+.+\s+market walk\s*$", re.IGNORECASE)
+
+
+def _is_filler_stop(stop: AIStop) -> bool:
+    """True for planner padding / generic use-case labels — excluded from stats."""
+    if _PLANNER_PLACEHOLDER_MARK in (stop.description or "").lower():
+        return True
+    name = " ".join(stop.name.lower().split())
+    if name in _FILLER_NAME_EXACT:
+        return True
+    if any(name.startswith(p) for p in _FILLER_NAME_PREFIXES):
+        return True
+    return bool(_FILLER_OLD_MARKET_RE.match(name))
 
 
 # ---------------------------------------------------------------------------
@@ -225,8 +261,31 @@ class _LLMDay(BaseModel):
 
 
 class _LLMItineraryDraft(BaseModel):
-    emoji: str = Field(default="🧭")
+    # Trip-level planning surface (Tier 2). route_summary forces circuit
+    # reasoning; the rest carry the GPT-5.5-style overview/transport/stay/budget.
+    route_summary: str = Field(default="")
+    transport_strategy: str = Field(default="")
+    stay_by_city: dict[str, str] = Field(default_factory=dict)
+    budget_estimate: str = Field(default="")
     days: list[_LLMDay] = Field(default_factory=list)
+
+    @field_validator("stay_by_city", mode="before")
+    @classmethod
+    def _coerce_stay(cls, v: Any) -> dict[str, str]:
+        # Smaller models sometimes emit a list of {"city","stay"} objects or a
+        # string instead of a {city: stay} map. Coerce defensively.
+        if isinstance(v, dict):
+            return {str(k): str(val) for k, val in v.items() if val}
+        if isinstance(v, list):
+            out: dict[str, str] = {}
+            for item in v:
+                if isinstance(item, dict):
+                    city = item.get("city") or item.get("name")
+                    stay = item.get("stay") or item.get("area") or item.get("suggestion")
+                    if city and stay:
+                        out[str(city)] = str(stay)
+            return out
+        return {}
 
 
 # ---------------------------------------------------------------------------
@@ -234,139 +293,43 @@ class _LLMItineraryDraft(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-_SYNTH_SYSTEM = """You are a travel writer who has actually been to this \
-destination — you are texting an itinerary to a friend who is about to go. You \
-receive candidate places (each with one or more sources: youtube, reddit, blog) \
-researched for ONE specific trip, and you must compose a coherent day-by-day \
-itinerary in a voice that sounds like a human wrote it, not an LLM filling JSON.
+_SYNTH_SYSTEM = load_skill("synthesizer")
 
-HARD RULES (do not break these):
-1. The itinerary MUST have exactly the number of days requested.
-2. Each day MUST have between {min_stops} and {max_stops} stops. The target \
-count is an UPPER BOUND, not a quota. Quality beats quantity: if there \
-aren't enough strong candidates to support the target without inventing filler, \
-emit fewer stops (down to {min_stops}). Never pad to the target with generic \
-maps anchors when real research exists on other days you could use instead.
-3. Every stop's `name` MUST either:
-   (a) reference one of the input candidate titles (exact or close paraphrase), \
-or
-   (b) be a NAMED proper-noun anchor for the day's city — a specific landmark, \
-restaurant, viewpoint, market, neighbourhood, or beach by its actual name. When \
-you use (b), set `source` to "maps" and leave `discovery_title` empty. Prefer \
-(a) — use (b) only when (a) would mean omitting a critical structural slot \
-(e.g. arrival, dinner, sunset) the research didn't cover.
-4. When a stop is based on a candidate, set `source` to one of the candidate's \
-sources (prefer 'youtube' for photo/vibe places, 'reddit' for tips/warnings, \
-'blog' for cultural/restaurant context), and set `discovery_title` to the \
-candidate's exact title.
-5. No place may appear on two different days.
-6. Cluster geographically within a day — don't jump between distant areas.
-7. Respect the trip's vibes, season warnings, and any festival context.
-8. WARNINGS SURFACING: if the Signal summary includes "Warnings: ...", Day 1's \
-`description` MUST mention at least one warning (verbatim or close paraphrase) \
-so the traveler sees the risk before planning.
-9. CHRONOLOGY: within a day, emit stops in clock order (morning → noon → \
-evening). The downstream system re-sorts defensively, but emit them in order \
-so the day narrative reads correctly.
 
-10. ANCHOR COVERAGE. If the destination has well-known must-see attractions \
-(famous theme parks, iconic landmarks, world-renowned museums, signature \
-districts) and any of them appear in the research candidates, INCLUDE them \
-in the itinerary. Hidden gems are valuable, but they must NOT displace the \
-anchors every visitor expects. Example: for Singapore, do not omit Sentosa \
-Island, Universal Studios, or S.E.A. Aquarium in favor of niche cafés if the \
-research lists them. A "hidden gems only" itinerary that misses the famous \
-sights is a worse traveler experience, not a better one. \
-Discoveries tagged "anchor_hint" in their tags list are pre-validated canonical \
-landmarks seeded independently of the research agents. You MUST include AT \
-LEAST 3 "anchor_hint" discoveries as stops (more if the trip has enough days). \
-If a research discovery covers the same place (same name or close synonym), \
-use the research version — it has a richer body. The anchor_hint entry is a \
-fallback, not a replacement. This anchor requirement overrides vibe-matching \
-when necessary: a Singapore trip with "food" vibes must still include Sentosa \
-or Gardens by the Bay, not only hawker centres.
+# --- Signals-driven skill overlays -----------------------------------------
+# Deterministic signals (region, trip shape, vibes) pick which domain-playbook
+# markdown gets appended to the base synthesizer prompt. This is the pragmatic
+# "skills" model for a deterministic pipeline: the *signals* choose the skill,
+# not an autonomous agent loop. Each overlay is a file under app/skills/.
 
-11. SOURCE FRESHNESS. Prefer candidates whose source content is recent. If a \
-discovery's evidence comes from a Reddit post older than 3 years or a blog \
-older than 2 years, treat it as a CANDIDATE SIGNAL — not a guaranteed fact. \
-Be cautious citing specific prices, opening hours, or "still open" claims \
-from old sources. When multiple converging sources support a recommendation, \
-prefer it over a single dated mention.
+# Region/state substrings that imply a multi-city circuit (not a single city).
+_MULTI_CITY_REGION_KEYWORDS = (
+    "rajasthan", "kerala", "himachal", "uttarakhand", "karnataka",
+    "tamil nadu", "tamilnadu", "gujarat", "north india", "south india",
+    "golden triangle", "north east", "northeast", "ladakh",
+)
+# Tokens (matched as substrings against vibes + preferences) that flag a
+# food/shopping-forward trip.
+_FOOD_SHOP_TOKENS = (
+    "food", "foodie", "cuisine", "culinary", "street food",
+    "shopping", "market", "bazaar",
+)
 
-VOICE RULES (the itinerary must not read like an LLM wrote it):
 
-12. TONE. Write as a knowledgeable friend who has been there. Concrete, \
-opinionated, second-person ("you'll want to…", "skip if you're not into…", \
-"go early — the courtyard gets mobbed by 11"). NOT travel-brochure voice. NOT \
-corporate. NOT a bulleted list of facts. NEVER use the words "beautiful", \
-"stunning", "breathtaking", "vibrant culture", "must-visit", "something for \
-everyone", "world-class", "rich history" — replace them with the specific \
-detail they were hiding.
-
-13. DAY DESCRIPTION = NARRATIVE. Each day's `description` must read as a 1-3 \
-sentence CONNECTED narrative of how the day flows — use linking words like \
-"start", "then", "after", "before", "wind down" to chain the day's actual \
-stops together. NOT a list of activities. NOT "today you will visit X, Y, \
-and Z."
-
-14. NO USE-CASE FRAMING in stop names. Stop `name` is a CONCRETE PROPER NOUN: \
-a place name, a restaurant name, a named viewpoint, a named market, a named \
-neighbourhood. BANNED stop names (these are filler, never emit them): "Lunch \
-at a cultural place", "Lunch at a local eatery", "Cultural anchor", "Cultural \
-exploration", "Cultural spot", "Neighborhood walk", "Local eatery", "Local \
-breakfast spot", "Local market", "Pool time", "Relaxation time", "Sunset \
-viewpoint" (without a name), "Evening stroll", "Dinner spot" (without a name), \
-"Standard anchor". If you have no candidate for a slot, name a specific known \
-spot of the day's city.
-
-15. STOP DESCRIPTIONS ARE OPINIONATED + SPECIFIC. Quote the candidate body's \
-concrete details directly: signature dish, architect/dynasty/era, trek grade, \
-opening time, photo-spot location, what to order, when to arrive. Add a hint \
-of insider voice (a timing tip, a what-to-skip).
-
-16. VIBES MUST SHOW. Every day's `description` must reflect at least one of \
-the trip's `vibes` — but as a SPECIFIC detail, not the bare word: heritage → \
-name an architect/dynasty/era; photography → mention the light or time of day; \
-food → name the dish; nightlife → name the club/bar + door time; adventure → \
-name the trail/grade/distance; beaches → name the beach.
-
-17. BUDGET MUST MATCH. Restaurants, bars, and stays must match the trip's \
-`Budget tier` from the Signal summary: \
-Low = street stalls, dhabas, hostels, dorms; \
-Medium = mid-range cafés, family restaurants, heritage homestays, boutique \
-guesthouses; \
-High = designer-hotel restaurants, well-known chef-led spots, boutique hotels; \
-Very-High = Michelin/heritage-palace dining, palace suites. \
-NEVER suggest a Very-High spot for a Low or Medium trip. If unsure, lean cheaper.
-
-EXAMPLES (illustrate the standard — don't copy them):
-- BAD day description: "Today you'll explore Jaipur's heritage and architecture."
-- GOOD day description: "Start at Hawa Mahal before 9 — the morning sun lights \
-up the sandstone honeycomb. Walk down Tripolia Bazaar to City Palace, lunch \
-on dal baati churma at LMB, then catch sunset from Nahargarh."
-- BAD stop name: "Lunch at a cultural place"
-- GOOD stop name: "Dal baati churma at Rawat Mishthan Bhandar"
-- BAD stop description: "A palace in Jaipur, also known as City Palace."
-- GOOD stop description: "Pink-sandstone Rajput palace, still the royal \
-family's residence. Mubarak Mahal courtyard is the photo spot — go before \
-10 to beat the tour-bus crowds."
-
-GOOD `tags`: 1-3 short tokens, emoji or short word, e.g. ["🍽️", "🌅"], \
-["📍", "viewpoint"], ["☕", "morning"]. Always include at least one tag.
-
-OUTPUT JSON shape: {{"emoji": "<one-or-two emoji>", "days": [<day>, ...]}}.
-Each day: {{"dayNumber": int, "city": "<city>", "title": "<short title>", \
-"description": "<1-3 sentence narrative>", "highlights": ["...", "..."], \
-"stops": [...]}}.
-Each stop: {{"name": "<place name>", "description": "<1-2 sentences, \
-opinionated + specific>", "time": "<H:MM>", "ampm": "AM|PM", \
-"duration": "<e.g. 1h, 90m>", "source": "youtube|reddit|blog|maps", \
-"tags": ["..."], "discovery_title": "<exact candidate title or empty>"}}.
-
-Final check before emitting: re-read every day's `description` — does it read \
-like a tour brochure or a list? If yes, rewrite it as one connected narrative \
-chaining that day's actual stops. Re-read every stop `name` — is it a generic \
-use-case label? If yes, replace with a named spot."""
+def _select_overlays(trip_params: TripParams, signals: TravelSignals) -> list[str]:
+    """Pick skill-overlay names to append to the synthesizer prompt, by signal."""
+    overlays: list[str] = []
+    dest = trip_params.destination.lower()
+    if signals.region == "india":
+        overlays.append("regions/india")
+    if trip_params.duration_days >= 4 and any(
+        kw in dest for kw in _MULTI_CITY_REGION_KEYWORDS
+    ):
+        overlays.append("trip_shapes/region_multi_city")
+    haystack = (" ".join(trip_params.vibes) + " " + (trip_params.preferences or "")).lower()
+    if any(tok in haystack for tok in _FOOD_SHOP_TOKENS):
+        overlays.append("vibes/food_and_markets")
+    return overlays
 
 
 def _format_candidates(cands: list[_PlaceCandidate]) -> str:
@@ -395,8 +358,28 @@ def _format_signal_summary(signals: TravelSignals) -> str:
     ]
     if signals.active_festivals:
         parts.append(f"Active festivals: {', '.join(signals.active_festivals)}")
+    if signals.vibe_source_weights:
+        weights_str = ", ".join(
+            f"{src} {weight:.0%}"
+            for src, weight in sorted(
+                signals.vibe_source_weights.items(),
+                key=lambda kv: kv[1],
+                reverse=True,
+            )
+        )
+        parts.append(
+            f"Source emphasis (derived from vibes): {weights_str} — when two "
+            "candidates compete for the same slot, prefer the one from the "
+            "higher-weighted source."
+        )
+    if signals.query_modifiers:
+        parts.append("Interest keywords: " + ", ".join(signals.query_modifiers[:12]))
     if signals.warnings:
         parts.append("Warnings: " + " | ".join(signals.warnings))
+    if signals.seasonal_tips:
+        parts.append("Seasonal tips: " + " | ".join(signals.seasonal_tips))
+    if signals.currency_hint:
+        parts.append(f"Local currency: {signals.currency_hint}")
     return "\n".join(parts)
 
 
@@ -405,12 +388,19 @@ def _build_prompt(
     signals: TravelSignals,
     candidates: list[_PlaceCandidate],
     target_counts: list[int],
+    geo_brief: GeoBrief | None = None,
 ) -> tuple[str, str]:
     """Return (system_prompt, user_prompt)."""
     target_per_day = target_counts[0] if target_counts else MIN_STOPS_PER_DAY
     system = _SYNTH_SYSTEM.format(
         min_stops=MIN_STOPS_PER_DAY, max_stops=MAX_STOPS_PER_DAY
     )
+    # Append signals-selected skill overlays (region/trip-shape/vibe playbooks).
+    # Composed AFTER .format() so overlay braces never collide with format fields.
+    overlays = _select_overlays(trip_params, signals)
+    if overlays:
+        system = system + "\n\n" + "\n\n".join(load_skill(name) for name in overlays)
+        logger.info("synthesizer.overlays=%s", overlays)
     vibes_str = ", ".join(trip_params.vibes) if trip_params.vibes else "—"
     voice_cues = (
         "=== Voice cues ===\n"
@@ -422,6 +412,19 @@ def _build_prompt(
         f"Pace: {trip_params.pace} → aim for ~{target_per_day} stops/day, "
         "emit fewer if the research is thin.\n"
     )
+    # The traveler's free-text request is the single most direct expression of
+    # intent. It MUST win over generic vibe inference when the two conflict.
+    prefs = (trip_params.preferences or "").strip()
+    prefs_block = (
+        "\n=== Traveler's own words (HIGHEST PRIORITY) ===\n"
+        f"{prefs}\n"
+        "Honor these explicitly. When they conflict with the generic vibe list "
+        "or with a research candidate, the traveler's own words win.\n"
+        if prefs
+        else ""
+    )
+    geo_block = geo_brief.to_prompt_block() if geo_brief and not geo_brief.is_empty() else ""
+    geo_section = f"\n{geo_block}\n" if geo_block else ""
     user = (
         f"Destination: {trip_params.destination}\n"
         f"Trip dates: {trip_params.date_from} → {trip_params.date_to}\n"
@@ -434,8 +437,10 @@ def _build_prompt(
         f"Pace: {trip_params.pace}\n"
         f"Vibes: {vibes_str}\n"
         f"Accommodation: {trip_params.accommodation}\n"
+        f"{prefs_block}"
         f"\n{voice_cues}"
         f"\n=== Signal summary ===\n{_format_signal_summary(signals)}\n"
+        f"{geo_section}"
         f"\n=== Research candidates ({len(candidates)}) ===\n"
         f"{_format_candidates(candidates)}\n"
         f"\nProduce the day-by-day itinerary now. Reference candidate titles "
@@ -465,17 +470,18 @@ async def _extract_via_llm(
     signals: TravelSignals,
     candidates: list[_PlaceCandidate],
     target_counts: list[int],
+    geo_brief: GeoBrief | None = None,
 ) -> _LLMItineraryDraft | None:
     """Single LLM call. Returns None on error so caller can retry or fall back."""
-    system, user = _build_prompt(trip_params, signals, candidates, target_counts)
+    system, user = _build_prompt(
+        trip_params, signals, candidates, target_counts, geo_brief
+    )
     try:
-        llm = get_llm("synthesizer")
-        try:
-            structured = llm.with_structured_output(
-                _LLMItineraryDraft, method="json_mode"
-            )
-        except Exception:  # noqa: BLE001
-            structured = llm.with_structured_output(_LLMItineraryDraft)
+        # Cerebras-235B primary with Groq-70B fallback (see factory). Structured
+        # output + provider fallback are composed in get_structured_llm.
+        structured = get_structured_llm(
+            "synthesizer", _LLMItineraryDraft, method="json_mode"
+        )
         messages: list[Any] = [
             SystemMessage(content=system),
             HumanMessage(content=user),
@@ -489,8 +495,9 @@ async def _extract_via_llm(
         if not isinstance(result, _LLMItineraryDraft):
             result = _LLMItineraryDraft.model_validate(result)
         logger.info(
-            "[LLM] synthesizer → returned  days=%d",
+            "[LLM] synthesizer → returned  days=%d  route=%r",
             len(result.days) if result.days else 0,
+            (result.route_summary or "")[:160],
         )
         return result
     except Exception as e:  # noqa: BLE001
@@ -604,6 +611,7 @@ def _llm_draft_to_itinerary(
     candidates: list[_PlaceCandidate],
     discoveries_by_id: dict[str, ResearchDiscovery],
     duration_days: int,
+    signals: TravelSignals | None = None,
 ) -> AIItinerary:
     """Map (loose) LLM draft → (strict) AIItinerary. Raises ValidationError on fail."""
     candidates_by_norm = {_normalize_title(c.title): c for c in candidates}
@@ -699,15 +707,17 @@ def _llm_draft_to_itinerary(
 
     stats_places, stats_tips, stats_photo = _compute_stats(ai_days, discoveries_out)
 
-    emoji = draft.emoji.strip() or "🧭"
-    if len(emoji) > 4:
-        emoji = emoji[:4]
-
     return AIItinerary(
-        emoji=emoji,
         stats_places=stats_places,
         stats_tips=stats_tips,
         stats_photo_stops=stats_photo,
+        # Trip-level surface: from the LLM draft, except seasonal_tips which are
+        # deterministic (from signals) so they're always season-correct.
+        route_summary=(draft.route_summary.strip() or None),
+        transport_strategy=(draft.transport_strategy.strip() or None),
+        seasonal_tips=list(signals.seasonal_tips) if signals else [],
+        stay_by_city=dict(draft.stay_by_city),
+        budget_estimate=(draft.budget_estimate.strip() or None),
         discoveries=discoveries_out,
         days=ai_days,
     )
@@ -784,6 +794,7 @@ def _skeleton_itinerary(
     trip_params: TripParams,
     candidates: list[_PlaceCandidate],
     discoveries: list[ResearchDiscovery],
+    signals: TravelSignals | None = None,
 ) -> AIItinerary:
     """Deterministic fallback used when LLM fails or input is too thin.
 
@@ -857,11 +868,23 @@ def _skeleton_itinerary(
     discoveries_out = _pad_discoveries(discoveries)
     stats_places, stats_tips, stats_photo = _compute_stats(days, discoveries_out)
 
+    # Deterministic trip-level surface for the skeleton path (no LLM): a plain
+    # city-order route, season-correct tips; transport/stay/budget left empty.
+    skeleton_cities: list[str] = []
+    for d in days:
+        if d.city and d.city not in skeleton_cities:
+            skeleton_cities.append(d.city)
+    route_summary = " → ".join(skeleton_cities) if skeleton_cities else None
+
     return AIItinerary(
-        emoji="🧭",
         stats_places=stats_places,
         stats_tips=stats_tips,
         stats_photo_stops=stats_photo,
+        route_summary=route_summary,
+        transport_strategy=None,
+        seasonal_tips=list(signals.seasonal_tips) if signals else [],
+        stay_by_city={},
+        budget_estimate=None,
         discoveries=discoveries_out,
         days=days,
     )
@@ -928,23 +951,22 @@ def _compute_stats(
 ) -> tuple[int, int, int]:
     """(stats_places, stats_tips, stats_photo_stops).
 
-    Honest counts (BENCHMARK §6 P1/P2 fix):
-    - places: unique stops whose source != "maps". Don't count generic anchors
-      like "Cultural anchor" / "Local breakfast spot" — they're filler, not
-      places the user actually researched.
+    Honest, filler-aware counts:
+    - places: unique real named stops — counts genuine anchors regardless of
+      source (a real "Amber Fort" with source="maps" IS a place), but excludes
+      planner padding + generic use-case labels (see `_is_filler_stop`). This
+      fixes the undercount where real LLM-named maps anchors weren't counted.
     - tips: discoveries with a tip/warning/recommendation tag whose title is
-      referenced by at least one stop. Drops the "5 tips badge but 0 tips in
-      itinerary" lie from the BENCHMARK run.
-    - photo_stops: stops whose source is youtube OR whose tags include a
-      photo/view token. Counts only non-maps stops too (maps anchors can't
-      be photo discoveries).
+      referenced by at least one real (non-filler) stop.
+    - photo_stops: real (non-filler) stops whose source is youtube OR whose tags
+      include a photo/view token.
     """
     unique_named: set[str] = set()
     referenced_titles: set[str] = set()
     photo = 0
     for day in days:
         for stop in day.stops:
-            if stop.source == "maps":
+            if _is_filler_stop(stop):
                 continue
             unique_named.add(stop.name.lower())
             referenced_titles.add(stop.name.lower())
@@ -985,6 +1007,7 @@ async def run_synthesizer(
     trip_params: TripParams,
     signals: TravelSignals,
     discoveries: list[ResearchDiscovery],
+    geo_brief: GeoBrief | None = None,
 ) -> AIItinerary:
     """Compose the final itinerary from all discoveries.
 
@@ -1015,11 +1038,11 @@ async def run_synthesizer(
             len(candidates),
             MIN_DISCOVERIES,
         )
-        return _skeleton_itinerary(trip_params, candidates, discoveries)
+        return _skeleton_itinerary(trip_params, candidates, discoveries, signals)
 
     for attempt in range(1, MAX_LLM_ATTEMPTS + 1):
         draft = await _extract_via_llm(
-            trip_params, signals, candidates, target_counts
+            trip_params, signals, candidates, target_counts, geo_brief
         )
         if draft is None:
             logger.warning(
@@ -1034,6 +1057,7 @@ async def run_synthesizer(
                 candidates,
                 discoveries_by_id,
                 trip_params.duration_days,
+                signals,
             )
             logger.info(
                 "synthesizer.done attempt=%d days=%d stops=%d discoveries=%d",
@@ -1055,4 +1079,4 @@ async def run_synthesizer(
         "synthesizer: all %d LLM attempts failed — falling back to skeleton",
         MAX_LLM_ATTEMPTS,
     )
-    return _skeleton_itinerary(trip_params, candidates, discoveries)
+    return _skeleton_itinerary(trip_params, candidates, discoveries, signals)
