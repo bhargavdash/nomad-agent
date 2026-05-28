@@ -23,10 +23,18 @@ UDAIPUR = (24.5854, 73.7125)
 
 def _trip(**ov) -> TripParams:
     base = dict(
-        trip_id="t1", user_id="u1", destination="Rajasthan, India",
-        date_from="2026-12-20", date_to="2026-12-31", duration_days=11,
-        travelers="2", vibes=["heritage"], accommodation="Heritage Haveli",
-        pace="Balanced", budget="Medium", preferences=None,
+        trip_id="t1",
+        user_id="u1",
+        destination="Rajasthan, India",
+        date_from="2026-12-20",
+        date_to="2026-12-31",
+        duration_days=11,
+        travelers="2",
+        vibes=["heritage"],
+        accommodation="Heritage Haveli",
+        pace="Balanced",
+        budget="Medium",
+        preferences=None,
     )
     base.update(ov)
     return TripParams(**base)
@@ -56,8 +64,8 @@ def test_sun_times_jaipur_december_matches_reality() -> None:
     sr, ss = sun_times(date(2026, 12, 25), *JAIPUR, 5.5)
     sr_h, sr_m = map(int, sr.split(":"))
     ss_h, ss_m = map(int, ss.split(":"))
-    assert sr_h == 7 and 5 <= sr_m <= 25      # ~7:1x
-    assert ss_h == 17 and 30 <= ss_m <= 55    # ~17:4x
+    assert sr_h == 7 and 5 <= sr_m <= 25  # ~7:1x
+    assert ss_h == 17 and 30 <= ss_m <= 55  # ~17:4x
 
 
 def test_sun_times_polar_returns_none() -> None:
@@ -93,8 +101,10 @@ def test_sun_times_paris_june_dst_correct() -> None:
 
 def test_nearest_neighbour_fixes_backtracking_order() -> None:
     coords = {
-        "Jaipur": JAIPUR, "Jodhpur": JODHPUR,
-        "Jaisalmer": JAISALMER, "Udaipur": UDAIPUR,
+        "Jaipur": JAIPUR,
+        "Jodhpur": JODHPUR,
+        "Jaisalmer": JAISALMER,
+        "Udaipur": UDAIPUR,
     }
     # A deliberately bad order that bounces east-west: Jaisalmer (far W) then
     # back to Jaipur (far E) then Udaipur (S). NN from the start should reorder.

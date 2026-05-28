@@ -177,6 +177,7 @@ async def test_search_reddit_hits_correct_endpoint(monkeypatch) -> None:
 async def test_search_reddit_raises_blocked_on_403(monkeypatch) -> None:
     """403 on both www and old.reddit.com → RedditBlockedError so the caller
     can short-circuit fan-out instead of grinding through doomed requests."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(403, json={"error": "blocked"})
 
@@ -188,6 +189,7 @@ async def test_search_reddit_raises_blocked_on_403(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_search_reddit_falls_back_to_old_reddit_on_403(monkeypatch) -> None:
     """If www.reddit.com 403s but old.reddit.com responds, we should succeed."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.host == "old.reddit.com":
             return httpx.Response(
@@ -224,6 +226,7 @@ async def test_search_reddit_falls_back_to_old_reddit_on_403(monkeypatch) -> Non
 @pytest.mark.asyncio
 async def test_search_reddit_returns_empty_on_5xx(monkeypatch) -> None:
     """Server errors are treated as transient — return [] without fallback."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500, text="boom")
 
@@ -269,9 +272,7 @@ async def test_search_many_aborts_after_consecutive_403s(monkeypatch) -> None:
     monkeypatch.setattr(reddit_tool, "search_reddit", fake_search_reddit)
 
     queries = [(f"q{i}", "travel") for i in range(10)]
-    out = await reddit_tool.search_many_with_rate_limit(
-        queries, limit_per_query=5, sleep_seconds=0
-    )
+    out = await reddit_tool.search_many_with_rate_limit(queries, limit_per_query=5, sleep_seconds=0)
     assert out == []
     # Should give up after 3 consecutive blocks, not run all 10.
     assert call_count == 3

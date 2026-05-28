@@ -120,7 +120,11 @@ async def youtube_node(state: PipelineState) -> dict[str, Any]:
     t0 = time.perf_counter()
     logger.info("[NODE] youtube_shorts → starting")
     discoveries = await run_youtube_agent(state["trip_params"], state["signals"])
-    logger.info("[NODE] youtube_shorts → done  discoveries=%d  (%.1fs)", len(discoveries), time.perf_counter() - t0)
+    logger.info(
+        "[NODE] youtube_shorts → done  discoveries=%d  (%.1fs)",
+        len(discoveries),
+        time.perf_counter() - t0,
+    )
     return {"yt_discoveries": discoveries}
 
 
@@ -129,10 +133,12 @@ async def youtube_longform_node(state: PipelineState) -> dict[str, Any]:
         return {"yt_longform_discoveries": []}  # cache hit — skip
     t0 = time.perf_counter()
     logger.info("[NODE] youtube_longform → starting")
-    discoveries = await run_youtube_longform_agent(
-        state["trip_params"], state["signals"]
+    discoveries = await run_youtube_longform_agent(state["trip_params"], state["signals"])
+    logger.info(
+        "[NODE] youtube_longform → done  discoveries=%d  (%.1fs)",
+        len(discoveries),
+        time.perf_counter() - t0,
     )
-    logger.info("[NODE] youtube_longform → done  discoveries=%d  (%.1fs)", len(discoveries), time.perf_counter() - t0)
     return {"yt_longform_discoveries": discoveries}
 
 
@@ -142,7 +148,9 @@ async def reddit_node(state: PipelineState) -> dict[str, Any]:
     t0 = time.perf_counter()
     logger.info("[NODE] reddit → starting")
     discoveries = await run_reddit_agent(state["trip_params"], state["signals"])
-    logger.info("[NODE] reddit → done  discoveries=%d  (%.1fs)", len(discoveries), time.perf_counter() - t0)
+    logger.info(
+        "[NODE] reddit → done  discoveries=%d  (%.1fs)", len(discoveries), time.perf_counter() - t0
+    )
     return {"reddit_discoveries": discoveries}
 
 
@@ -152,7 +160,11 @@ async def google_node(state: PipelineState) -> dict[str, Any]:
     t0 = time.perf_counter()
     logger.info("[NODE] google_blog → starting")
     discoveries = await run_google_blog_agent(state["trip_params"], state["signals"])
-    logger.info("[NODE] google_blog → done  discoveries=%d  (%.1fs)", len(discoveries), time.perf_counter() - t0)
+    logger.info(
+        "[NODE] google_blog → done  discoveries=%d  (%.1fs)",
+        len(discoveries),
+        time.perf_counter() - t0,
+    )
     return {"google_discoveries": discoveries}
 
 
@@ -174,7 +186,8 @@ async def merge_node(state: PipelineState) -> dict[str, Any]:
                 logger.warning("merge_node: mid-flight write failed (cache hit)", exc_info=True)
         logger.info(
             "[NODE] merge → CACHE HIT  all_discoveries=%d  (%.1fs)",
-            len(all_discoveries), time.perf_counter() - t0,
+            len(all_discoveries),
+            time.perf_counter() - t0,
         )
         return {"all_discoveries": all_discoveries}
 
@@ -185,7 +198,11 @@ async def merge_node(state: PipelineState) -> dict[str, Any]:
     goog = state.get("google_discoveries", []) or []
     logger.info(
         "[NODE] merge → yt_shorts=%d  yt_longform=%d  reddit=%d  google=%d  total_in=%d",
-        len(yt), len(ytl), len(red), len(goog), len(yt) + len(ytl) + len(red) + len(goog),
+        len(yt),
+        len(ytl),
+        len(red),
+        len(goog),
+        len(yt) + len(ytl) + len(red) + len(goog),
     )
     merged: list[ResearchDiscovery] = []
     merged.extend(yt)
@@ -197,11 +214,10 @@ async def merge_node(state: PipelineState) -> dict[str, Any]:
     # Only add seeds for anchors not already covered by real research (fuzzy match).
     existing_lower = {d.title.lower() for d in merged}
     anchor_seeds: list[ResearchDiscovery] = []
-    for name in (state["signals"].top_anchors or []):
+    for name in state["signals"].top_anchors or []:
         name_lower = name.lower()
         already_covered = any(
-            name_lower in existing or existing in name_lower
-            for existing in existing_lower
+            name_lower in existing or existing in name_lower for existing in existing_lower
         )
         if not already_covered:
             anchor_seeds.append(
@@ -229,9 +245,7 @@ async def merge_node(state: PipelineState) -> dict[str, Any]:
         chunk_size = max(1, min(5, len(all_discoveries) // 2))
         first_chunk = all_discoveries[:chunk_size]
         try:
-            await supabase_writer.write_discoveries(
-                state["trip_params"].trip_id, first_chunk
-            )
+            await supabase_writer.write_discoveries(state["trip_params"].trip_id, first_chunk)
         except Exception:  # noqa: BLE001
             # Discoveries are a polish — never fail the pipeline over a
             # write error here. Final write in _run_and_persist still tries.

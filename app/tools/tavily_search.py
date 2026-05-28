@@ -31,7 +31,7 @@ _EXCLUDED_DOMAINS = [
     "cleartrip.com",
     "ixigo.com",
     "goibibo.com",
-    "reddit.com",   # reddit agent's territory
+    "reddit.com",  # reddit agent's territory
     "youtube.com",  # youtube agent's territory
     "tiktok.com",
     "instagram.com",
@@ -57,8 +57,8 @@ class TavilyResult:
 
     title: str
     url: str
-    content: str   # AI-cleaned excerpt, typically 200–500 chars
-    score: float   # Tavily relevance score 0–1
+    content: str  # AI-cleaned excerpt, typically 200–500 chars
+    score: float  # Tavily relevance score 0–1
 
 
 async def search_travel_blogs(
@@ -123,10 +123,7 @@ async def search_fanout(
     if not queries:
         return []
     results_per_query = await asyncio.gather(
-        *(
-            search_travel_blogs(q, max_results=max_results_per_query)
-            for q in queries
-        ),
+        *(search_travel_blogs(q, max_results=max_results_per_query) for q in queries),
         return_exceptions=True,
     )
     by_url: dict[str, TavilyResult] = {}
@@ -141,7 +138,5 @@ async def search_fanout(
             if existing is None or r.score > existing.score:
                 by_url[r.url] = r
     deduped = sorted(by_url.values(), key=lambda r: r.score, reverse=True)
-    logger.info(
-        "tavily.fanout queries=%d unique_results=%d", len(queries), len(deduped)
-    )
+    logger.info("tavily.fanout queries=%d unique_results=%d", len(queries), len(deduped))
     return deduped

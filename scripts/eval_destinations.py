@@ -68,9 +68,11 @@ async def _build_itinerary(trip: TripParams) -> tuple[AIItinerary, TravelSignals
         gg = await run_google_blog_agent(trip, signals)
         seeds = [
             ResearchDiscovery(
-                id=f"anchor-{i}", title=name,
+                id=f"anchor-{i}",
+                title=name,
                 body=f"{name} — a well-known landmark in {trip.destination}.",
-                source="maps", tags=["anchor_hint"],
+                source="maps",
+                tags=["anchor_hint"],
             )
             for i, name in enumerate(signals.top_anchors or [])
         ]

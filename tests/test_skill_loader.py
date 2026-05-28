@@ -39,7 +39,7 @@ def test_strip_frontmatter_noop_without_block() -> None:
 
 def test_strip_frontmatter_preserves_body_braces() -> None:
     # Format placeholders + escaped braces must survive untouched.
-    text = '---\nname: x\n---\nUse {destination} and literal {{json}}.'
+    text = "---\nname: x\n---\nUse {destination} and literal {{json}}."
     _meta, body = _strip_frontmatter(text)
     assert body == "Use {destination} and literal {{json}}."
 
@@ -51,9 +51,7 @@ def test_strip_frontmatter_preserves_body_braces() -> None:
 
 def test_include_inlines_shared_block(tmp_path) -> None:
     (tmp_path / "_shared").mkdir()
-    (tmp_path / "_shared" / "block.md").write_text(
-        "SHARED CONTENT", encoding="utf-8"
-    )
+    (tmp_path / "_shared" / "block.md").write_text("SHARED CONTENT", encoding="utf-8")
     main = tmp_path / "main.md"
     main.write_text(
         "---\nname: main\n---\nBefore.\n@include _shared/block.md\nAfter.",

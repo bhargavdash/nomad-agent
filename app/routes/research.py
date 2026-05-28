@@ -134,9 +134,7 @@ async def _run_and_persist(trip_params: TripParams) -> None:
         all_discoveries = final.get("all_discoveries") or []
         if all_discoveries:
             logger.info("[DB] writing final discoveries count=%d", len(all_discoveries))
-            await supabase_writer.write_discoveries(
-                trip_params.trip_id, all_discoveries
-            )
+            await supabase_writer.write_discoveries(trip_params.trip_id, all_discoveries)
 
         logger.info(
             "[DB] writing itinerary  days=%d  stops_places=%d  stops_tips=%d  stops_photo=%d",

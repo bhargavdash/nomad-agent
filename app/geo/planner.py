@@ -40,37 +40,73 @@ MAX_CITIES = 8  # cap the circuit; longer trips still group days within cities
 # offset on the *trip date* — so European summer (CEST) etc. come out right,
 # fixing the "Paris sunrise 1h early" blemish. India is single-zone/no-DST.
 _TZ_NAME_OVERRIDES: dict[str, str] = {
-    "thailand": "Asia/Bangkok", "bangkok": "Asia/Bangkok", "phuket": "Asia/Bangkok",
-    "vietnam": "Asia/Ho_Chi_Minh", "hanoi": "Asia/Ho_Chi_Minh",
+    "thailand": "Asia/Bangkok",
+    "bangkok": "Asia/Bangkok",
+    "phuket": "Asia/Bangkok",
+    "vietnam": "Asia/Ho_Chi_Minh",
+    "hanoi": "Asia/Ho_Chi_Minh",
     "ho chi minh": "Asia/Ho_Chi_Minh",
-    "indonesia": "Asia/Jakarta", "jakarta": "Asia/Jakarta", "bali": "Asia/Makassar",
-    "singapore": "Asia/Singapore", "malaysia": "Asia/Kuala_Lumpur",
+    "indonesia": "Asia/Jakarta",
+    "jakarta": "Asia/Jakarta",
+    "bali": "Asia/Makassar",
+    "singapore": "Asia/Singapore",
+    "malaysia": "Asia/Kuala_Lumpur",
     "kuala lumpur": "Asia/Kuala_Lumpur",
-    "japan": "Asia/Tokyo", "tokyo": "Asia/Tokyo",
-    "philippines": "Asia/Manila", "manila": "Asia/Manila", "sri lanka": "Asia/Colombo",
-    "dubai": "Asia/Dubai", "uae": "Asia/Dubai",
-    "uk": "Europe/London", "london": "Europe/London", "england": "Europe/London",
+    "japan": "Asia/Tokyo",
+    "tokyo": "Asia/Tokyo",
+    "philippines": "Asia/Manila",
+    "manila": "Asia/Manila",
+    "sri lanka": "Asia/Colombo",
+    "dubai": "Asia/Dubai",
+    "uae": "Asia/Dubai",
+    "uk": "Europe/London",
+    "london": "Europe/London",
+    "england": "Europe/London",
     "scotland": "Europe/London",
-    "france": "Europe/Paris", "paris": "Europe/Paris",
-    "italy": "Europe/Rome", "rome": "Europe/Rome", "venice": "Europe/Rome",
-    "spain": "Europe/Madrid", "madrid": "Europe/Madrid", "barcelona": "Europe/Madrid",
-    "germany": "Europe/Berlin", "berlin": "Europe/Berlin", "munich": "Europe/Berlin",
-    "switzerland": "Europe/Zurich", "greece": "Europe/Athens", "athens": "Europe/Athens",
-    "portugal": "Europe/Lisbon", "lisbon": "Europe/Lisbon",
-    "netherlands": "Europe/Amsterdam", "amsterdam": "Europe/Amsterdam",
-    "austria": "Europe/Vienna", "vienna": "Europe/Vienna",
-    "prague": "Europe/Prague", "budapest": "Europe/Budapest",
-    "new york": "America/New_York", "nyc": "America/New_York",
-    "usa": "America/New_York", "united states": "America/New_York",
-    "boston": "America/New_York", "miami": "America/New_York", "chicago": "America/Chicago",
-    "los angeles": "America/Los_Angeles", "san francisco": "America/Los_Angeles",
-    "seattle": "America/Los_Angeles", "las vegas": "America/Los_Angeles",
-    "canada": "America/Toronto", "toronto": "America/Toronto",
-    "vancouver": "America/Vancouver", "montreal": "America/Toronto",
-    "mexico": "America/Mexico_City", "cancun": "America/Cancun",
-    "australia": "Australia/Sydney", "sydney": "Australia/Sydney",
+    "france": "Europe/Paris",
+    "paris": "Europe/Paris",
+    "italy": "Europe/Rome",
+    "rome": "Europe/Rome",
+    "venice": "Europe/Rome",
+    "spain": "Europe/Madrid",
+    "madrid": "Europe/Madrid",
+    "barcelona": "Europe/Madrid",
+    "germany": "Europe/Berlin",
+    "berlin": "Europe/Berlin",
+    "munich": "Europe/Berlin",
+    "switzerland": "Europe/Zurich",
+    "greece": "Europe/Athens",
+    "athens": "Europe/Athens",
+    "portugal": "Europe/Lisbon",
+    "lisbon": "Europe/Lisbon",
+    "netherlands": "Europe/Amsterdam",
+    "amsterdam": "Europe/Amsterdam",
+    "austria": "Europe/Vienna",
+    "vienna": "Europe/Vienna",
+    "prague": "Europe/Prague",
+    "budapest": "Europe/Budapest",
+    "new york": "America/New_York",
+    "nyc": "America/New_York",
+    "usa": "America/New_York",
+    "united states": "America/New_York",
+    "boston": "America/New_York",
+    "miami": "America/New_York",
+    "chicago": "America/Chicago",
+    "los angeles": "America/Los_Angeles",
+    "san francisco": "America/Los_Angeles",
+    "seattle": "America/Los_Angeles",
+    "las vegas": "America/Los_Angeles",
+    "canada": "America/Toronto",
+    "toronto": "America/Toronto",
+    "vancouver": "America/Vancouver",
+    "montreal": "America/Toronto",
+    "mexico": "America/Mexico_City",
+    "cancun": "America/Cancun",
+    "australia": "Australia/Sydney",
+    "sydney": "Australia/Sydney",
     "melbourne": "Australia/Melbourne",
-    "new zealand": "Pacific/Auckland", "auckland": "Pacific/Auckland",
+    "new zealand": "Pacific/Auckland",
+    "auckland": "Pacific/Auckland",
     "queenstown": "Pacific/Auckland",
 }
 _REGION_TZ_DEFAULT: dict[str, str] = {
@@ -136,9 +172,7 @@ class GeoBrief:
         if self.legs:
             lines.append("Inter-city legs (by road, approximate):")
             for leg in self.legs:
-                lines.append(
-                    f"  {leg.from_city} → {leg.to_city}: ~{leg.km} km ({leg.drive_hint})"
-                )
+                lines.append(f"  {leg.from_city} → {leg.to_city}: ~{leg.km} km ({leg.drive_hint})")
         if self.sun:
             lines.append("Sunrise / sunset (local, for time-of-day hooks):")
             for city, (sr, ss) in self.sun.items():
@@ -227,10 +261,7 @@ def _nearest_neighbour_order(
         return cities, False
 
     def total(seq: list[str]) -> float:
-        return sum(
-            road_km(*coords[seq[i]], *coords[seq[i + 1]])
-            for i in range(len(seq) - 1)
-        )
+        return sum(road_km(*coords[seq[i]], *coords[seq[i + 1]]) for i in range(len(seq) - 1))
 
     start = cities[0]
     remaining = [c for c in cities if c != start]
@@ -246,9 +277,7 @@ def _nearest_neighbour_order(
     return (order, True) if improved else (cities, False)
 
 
-async def build_geo_brief(
-    trip_params: TripParams, signals: TravelSignals
-) -> GeoBrief:
+async def build_geo_brief(trip_params: TripParams, signals: TravelSignals) -> GeoBrief:
     """Build the geo brief. Always returns a GeoBrief (empty on any failure)."""
     try:
         cities = await _pick_cities(trip_params, signals)
@@ -286,7 +315,11 @@ async def build_geo_brief(
         tz_name = _tz_name(signals.region, dest.lower())
         if tz_name is not None:
             try:
-                d0 = date.fromisoformat(trip_params.date_from) if trip_params.date_from else date.today()
+                d0 = (
+                    date.fromisoformat(trip_params.date_from)
+                    if trip_params.date_from
+                    else date.today()
+                )
             except ValueError:
                 d0 = date.today()
             tz_offset = _offset_hours(tz_name, d0)
@@ -299,7 +332,11 @@ async def build_geo_brief(
 
         logger.info(
             "geo.brief dest=%r cities=%d legs=%d sun=%d reordered=%s",
-            dest, len(ordered), len(legs), len(sun), reordered,
+            dest,
+            len(ordered),
+            len(legs),
+            len(sun),
+            reordered,
         )
         return GeoBrief(ordered_cities=ordered, legs=legs, sun=sun, reordered=reordered)
     except Exception:  # noqa: BLE001

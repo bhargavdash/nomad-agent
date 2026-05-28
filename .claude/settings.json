@@ -1,13 +1,38 @@
 {
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c \"import sys,json,os; d=json.load(sys.stdin); p=os.path.basename(d.get('file_path','')); sys.exit(2) if p.startswith('.env') and not p.endswith('.example') else None\""
+          }
+        ]
+      }
+    ]
+  },
   "mcpServers": {
     "supabase": {
       "type": "http",
       "url": "https://mcp.supabase.com/mcp?project_ref=qtqignacbrwhblgjbxat"
+    },
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
     }
   },
   "permissions": {
     "allow": [
-      "WebSearch"
+      "WebSearch",
+      "Bash(uv run ruff check*)",
+      "Bash(uv run ruff format*)",
+      "Bash(uv run mypy app)",
+      "Bash(uv run pytest*)",
+      "Bash(uv run uvicorn*)",
+      "Bash(uv run python scripts/*)",
+      "Bash(uv sync)"
     ]
   }
 }

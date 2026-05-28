@@ -21,8 +21,13 @@ from app.signals import TravelSignals
 
 # Brochure words the output should never contain (mirrors the prompt's ban).
 _BANNED = (
-    "stunning", "breathtaking", "must-visit", "vibrant culture",
-    "world-class", "rich history", "something for everyone",
+    "stunning",
+    "breathtaking",
+    "must-visit",
+    "vibrant culture",
+    "world-class",
+    "rich history",
+    "something for everyone",
 )
 
 
@@ -33,9 +38,7 @@ def _currency_symbol(currency_hint: str) -> str:
     return currency_hint.strip()
 
 
-def score_itinerary(
-    itin: AIItinerary, trip: TripParams, signals: TravelSignals
-) -> dict:
+def score_itinerary(itin: AIItinerary, trip: TripParams, signals: TravelSignals) -> dict:
     """Return {checks: {name: bool}, passed, total, score(0-100)} for an itinerary."""
     days = itin.days
     duration = max(1, trip.duration_days)
@@ -55,9 +58,7 @@ def score_itinerary(
         budget = itin.budget_estimate or ""
         sym = _currency_symbol(signals.currency_hint)
         code = signals.currency_hint.split()[0]
-        checks["currency_ok"] = bool(budget) and (
-            sym in budget or code.lower() in budget.lower()
-        )
+        checks["currency_ok"] = bool(budget) and (sym in budget or code.lower() in budget.lower())
 
     # Chronology: each day's stops are non-decreasing by clock time.
     chrono_ok = True
@@ -70,8 +71,7 @@ def score_itinerary(
 
     # No banned brochure words anywhere in the prose.
     text = " ".join(
-        f"{d.description} " + " ".join(f"{s.name} {s.description}" for s in d.stops)
-        for d in days
+        f"{d.description} " + " ".join(f"{s.name} {s.description}" for s in d.stops) for d in days
     ).lower()
     checks["no_banned_words"] = not any(b in text for b in _BANNED)
 

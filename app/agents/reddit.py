@@ -61,9 +61,9 @@ logger = logging.getLogger(__name__)
 
 MAX_QUERIES = 6
 MAX_RESULTS_PER_QUERY = 8
-MAX_POSTS_FOR_LLM = 10         # cap before fetching comments + sending to LLM
-MAX_COMMENTS_PER_POST = 3      # spec'd top 3 comments
-MIN_POST_SCORE = 5             # drop low-engagement noise
+MAX_POSTS_FOR_LLM = 10  # cap before fetching comments + sending to LLM
+MAX_COMMENTS_PER_POST = 3  # spec'd top 3 comments
+MIN_POST_SCORE = 5  # drop low-engagement noise
 MAX_DISCOVERIES_RETURNED = 8
 
 # Per-post text caps (token-budget hygiene — Reddit threads can be enormous).
@@ -406,9 +406,7 @@ def _destination_tokens(destination: str) -> set[str]:
     return {t for t in tokens if t}
 
 
-def _post_mentions_destination(
-    post: RedditPost, dest_tokens: set[str]
-) -> bool:
+def _post_mentions_destination(post: RedditPost, dest_tokens: set[str]) -> bool:
     """True if title or first DEST_MENTION_BODY_PROBE chars of body name the destination.
 
     Handles the BENCHMARK failure: pan-India trip reports surface for queries
@@ -464,7 +462,8 @@ def _filter_posts(
         if dropped:
             logger.info(
                 "reddit.filter.dropped_off_topic count=%d kept=%d",
-                dropped, len(deduped),
+                dropped,
+                len(deduped),
             )
 
     if not default_subs:
@@ -613,7 +612,8 @@ def _validate_and_dedupe(
         if vmatch:
             logger.info(
                 "reddit.validate.drop reason=vague phrase=%r topic=%r",
-                vmatch.group(0), ins.topic,
+                vmatch.group(0),
+                ins.topic,
             )
             continue
         # Drop non-actionable negativity (health scares, corruption, politics,
@@ -623,7 +623,8 @@ def _validate_and_dedupe(
         if nmatch:
             logger.info(
                 "reddit.validate.drop reason=irrelevant_negativity phrase=%r topic=%r",
-                nmatch.group(0), ins.topic,
+                nmatch.group(0),
+                ins.topic,
             )
             continue
         valid_indices = [i for i in ins.evidence_post_indices if 1 <= i <= n_posts]
@@ -708,14 +709,14 @@ async def run_reddit_agent(
         pairs = _build_query_subreddit_pairs(queries, subreddits)
         logger.info(
             "reddit_agent.start subs=%r queries=%r pairs=%d",
-            subreddits, queries, len(pairs),
+            subreddits,
+            queries,
+            len(pairs),
         )
         if not pairs:
             return []
 
-        raw_posts = await search_many_with_rate_limit(
-            pairs, limit_per_query=MAX_RESULTS_PER_QUERY
-        )
+        raw_posts = await search_many_with_rate_limit(pairs, limit_per_query=MAX_RESULTS_PER_QUERY)
         if not raw_posts:
             logger.warning("reddit_agent: 0 posts across all queries")
             return []
@@ -728,7 +729,9 @@ async def run_reddit_agent(
         )
         logger.info(
             "reddit_agent: %d posts after filter (from %d, dest_tokens=%r)",
-            len(filtered), len(raw_posts), sorted(dest_tokens),
+            len(filtered),
+            len(raw_posts),
+            sorted(dest_tokens),
         )
         if not filtered:
             return []
@@ -740,7 +743,9 @@ async def run_reddit_agent(
         discoveries = _to_research_discoveries(validated)
         logger.info(
             "reddit_agent.done extracted=%d kept=%d returned=%d",
-            len(extracted), len(validated), len(discoveries),
+            len(extracted),
+            len(validated),
+            len(discoveries),
         )
         return discoveries
 

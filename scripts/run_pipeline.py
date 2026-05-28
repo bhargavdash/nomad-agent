@@ -91,8 +91,7 @@ def _print_discovery_summary(label: str, ds: list[ResearchDiscovery]) -> None:
         if len(body_one_line) > 120:
             body_one_line = body_one_line[:120] + "…"
         print(
-            f"  [{i:>2}] ({d.source:>7}) {d.title}\n"
-            f"       tags={d.tags}  body={body_one_line}",
+            f"  [{i:>2}] ({d.source:>7}) {d.title}\n       tags={d.tags}  body={body_one_line}",
             file=sys.stderr,
         )
 
@@ -116,8 +115,7 @@ def _resolve_trip_path(arg: str | None) -> Path:
     if fallback.exists():
         return fallback
     raise FileNotFoundError(
-        f"No TripParams JSON found for arg={arg!r}. "
-        f"Tried {candidate} and {fallback}."
+        f"No TripParams JSON found for arg={arg!r}. Tried {candidate} and {fallback}."
     )
 
 
@@ -166,8 +164,7 @@ async def run_pipeline_sequential(trip: TripParams) -> dict:
     all_discoveries = await cache.get_cached_research(trip.destination)
     if all_discoveries is not None:
         print(
-            f"CACHE HIT — {len(all_discoveries)} discoveries reused "
-            "(skipping all research agents)",
+            f"CACHE HIT — {len(all_discoveries)} discoveries reused (skipping all research agents)",
             file=sys.stderr,
         )
     else:
@@ -187,15 +184,13 @@ async def run_pipeline_sequential(trip: TripParams) -> dict:
 
         _banner("Stage 5 — Merge (with anchor seeding)")
         existing_lower = {
-            d.title.lower()
-            for d in [*yt_discoveries, *reddit_discoveries, *google_discoveries]
+            d.title.lower() for d in [*yt_discoveries, *reddit_discoveries, *google_discoveries]
         }
         anchor_seeds: list[ResearchDiscovery] = []
-        for name in (signals.top_anchors or []):
+        for name in signals.top_anchors or []:
             name_lower = name.lower()
             already_covered = any(
-                name_lower in existing or existing in name_lower
-                for existing in existing_lower
+                name_lower in existing or existing in name_lower for existing in existing_lower
             )
             if not already_covered:
                 anchor_seeds.append(

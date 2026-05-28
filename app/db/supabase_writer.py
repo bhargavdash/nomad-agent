@@ -146,9 +146,9 @@ async def mark_trip_failed(trip_id: str, error_message: str) -> None:
     def _mark() -> None:
         client = _get_client()
         client.table("trips").update({"status": "failed"}).eq("id", trip_id).execute()
-        client.table("research_jobs").update(
-            {"status": "failed", "message": error_message}
-        ).eq("trip_id", trip_id).execute()
+        client.table("research_jobs").update({"status": "failed", "message": error_message}).eq(
+            "trip_id", trip_id
+        ).execute()
 
     await asyncio.to_thread(_mark)
 

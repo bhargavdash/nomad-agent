@@ -9,7 +9,6 @@ No real API calls — uses httpx.MockTransport to verify that:
 
 from __future__ import annotations
 
-import json
 
 import httpx
 import pytest

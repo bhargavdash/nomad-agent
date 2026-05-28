@@ -38,9 +38,7 @@ def _resolve_role(role: str) -> tuple[str, str]:
         ),
     }
     if role not in mapping:
-        raise ValueError(
-            f"Unknown LLM role: {role!r}. Expected one of {list(mapping)}."
-        )
+        raise ValueError(f"Unknown LLM role: {role!r}. Expected one of {list(mapping)}.")
     return mapping[role]
 
 
@@ -111,9 +109,7 @@ def _build_llm(provider: str, model: str, *, role: str = "?") -> BaseChatModel:
         from langchain_openai import ChatOpenAI
 
         if not settings.TOGETHER_API_KEY:
-            raise RuntimeError(
-                "TOGETHER_API_KEY is not set but provider 'together' was requested."
-            )
+            raise RuntimeError("TOGETHER_API_KEY is not set but provider 'together' was requested.")
         return ChatOpenAI(
             model=model,
             api_key=settings.TOGETHER_API_KEY,
@@ -139,9 +135,7 @@ def _build_llm(provider: str, model: str, *, role: str = "?") -> BaseChatModel:
         from langchain_openai import ChatOpenAI
 
         if not settings.CEREBRAS_API_KEY:
-            raise RuntimeError(
-                "CEREBRAS_API_KEY is not set but provider 'cerebras' was requested."
-            )
+            raise RuntimeError("CEREBRAS_API_KEY is not set but provider 'cerebras' was requested.")
         # timeout + bounded retries so a peak-time queue-block fails fast to the
         # Groq fallback (see get_structured_llm) rather than hanging the request.
         return ChatOpenAI(
@@ -173,9 +167,7 @@ def _apply_structured(llm: BaseChatModel, schema: Any, method: str | None) -> Ru
     return llm.with_structured_output(schema)
 
 
-def get_structured_llm(
-    role: str, schema: Any, *, method: str | None = None
-) -> Runnable:
+def get_structured_llm(role: str, schema: Any, *, method: str | None = None) -> Runnable:
     """Return a structured-output runnable for `role`, with provider fallback.
 
     Equivalent to ``get_llm(role).with_structured_output(schema, method=...)``
@@ -195,8 +187,6 @@ def get_structured_llm(
         fb_llm = _build_llm(fb_provider, fb_model, role=f"{role}:fallback")
     except Exception as e:  # noqa: BLE001
         # Fallback misconfigured (e.g. missing key) — run primary-only.
-        logger.warning(
-            "get_structured_llm: fallback unavailable for role=%s: %s", role, e
-        )
+        logger.warning("get_structured_llm: fallback unavailable for role=%s: %s", role, e)
         return primary
     return primary.with_fallbacks([_apply_structured(fb_llm, schema, method)])

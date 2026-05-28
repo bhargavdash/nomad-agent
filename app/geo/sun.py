@@ -25,9 +25,7 @@ def _hhmm(local_hours: float) -> str:
     return f"{h:d}:{m:02d}"
 
 
-def sun_times(
-    d: date, lat: float, lng: float, tz_offset_hours: float
-) -> tuple[str, str] | None:
+def sun_times(d: date, lat: float, lng: float, tz_offset_hours: float) -> tuple[str, str] | None:
     """Return (sunrise, sunset) as 'H:MM' local strings, or None at polar day/night.
 
     Implements the Wikipedia "Sunrise equation". `tz_offset_hours` is the
@@ -37,17 +35,10 @@ def sun_times(
     j_star = n - lng / 360.0
     m_anom = math.radians((357.5291 + 0.98560028 * j_star) % 360)
     center = (
-        1.9148 * math.sin(m_anom)
-        + 0.0200 * math.sin(2 * m_anom)
-        + 0.0003 * math.sin(3 * m_anom)
+        1.9148 * math.sin(m_anom) + 0.0200 * math.sin(2 * m_anom) + 0.0003 * math.sin(3 * m_anom)
     )
     ecl_lon = math.radians((math.degrees(m_anom) + center + 282.9372) % 360)
-    j_transit = (
-        2451545.0
-        + j_star
-        + 0.0053 * math.sin(m_anom)
-        - 0.0069 * math.sin(2 * ecl_lon)
-    )
+    j_transit = 2451545.0 + j_star + 0.0053 * math.sin(m_anom) - 0.0069 * math.sin(2 * ecl_lon)
     decl = math.asin(math.sin(ecl_lon) * math.sin(_OBLIQUITY))
     lat_r = math.radians(lat)
     cos_omega = (math.sin(_SUN_ANGLE) - math.sin(lat_r) * math.sin(decl)) / (

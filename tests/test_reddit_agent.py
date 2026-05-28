@@ -146,10 +146,7 @@ def test_build_queries_uses_plain_hidden_gems_off_peak() -> None:
     signals = extract_signals(trip)
     assert signals.crowd_level == "low"
     queries = _build_queries(trip, signals)
-    assert any(
-        "hidden gems" in q.lower() and "avoid tourists" not in q.lower()
-        for q in queries
-    )
+    assert any("hidden gems" in q.lower() and "avoid tourists" not in q.lower() for q in queries)
 
 
 def test_build_queries_includes_first_vibe_and_season() -> None:
@@ -522,8 +519,7 @@ def test_filter_drops_off_topic_posts_when_dest_tokens_provided() -> None:
     dest = _destination_tokens("Manali, India")
     posts = [
         _post("on1", title="Best cafés in Old Manali", subreddit="IndiaTravel"),
-        _post("off1", title="Indian SIM card guide", body="Airtel vs Jio",
-              subreddit="india"),
+        _post("off1", title="Indian SIM card guide", body="Airtel vs Jio", subreddit="india"),
         _post("on2", title="Manali-Leh highway report", subreddit="ladakh"),
         _post("off2", title="Goa beach hut prices", subreddit="travel"),
     ]
@@ -545,13 +541,23 @@ def test_filter_weights_destination_specific_subs_above_generic() -> None:
     dest = _destination_tokens("Goa, India")
     posts: list[RedditPost] = []
     for i in range(20):
-        posts.append(_post(
-            f"goa{i}", subreddit="goa", title=f"Goa tip {i}", score=100 - i,
-        ))
+        posts.append(
+            _post(
+                f"goa{i}",
+                subreddit="goa",
+                title=f"Goa tip {i}",
+                score=100 - i,
+            )
+        )
     for i in range(20):
-        posts.append(_post(
-            f"trv{i}", subreddit="travel", title=f"Goa report {i}", score=80 - i,
-        ))
+        posts.append(
+            _post(
+                f"trv{i}",
+                subreddit="travel",
+                title=f"Goa report {i}",
+                score=80 - i,
+            )
+        )
 
     kept = _filter_posts(
         posts,
@@ -570,9 +576,7 @@ def test_filter_back_compat_no_weighting_when_default_subs_none() -> None:
     """Existing callers passing no default_subs keep the original simple-cap
     behavior so this is a non-breaking change."""
     dest = _destination_tokens("Goa")
-    posts = [
-        _post(f"p{i}", title=f"Goa thing {i}", score=100 - i) for i in range(15)
-    ]
+    posts = [_post(f"p{i}", title=f"Goa thing {i}", score=100 - i) for i in range(15)]
     kept = _filter_posts(posts, dest_tokens=dest)
     assert len(kept) == MAX_POSTS_FOR_LLM
 

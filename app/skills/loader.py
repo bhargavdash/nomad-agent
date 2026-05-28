@@ -61,7 +61,7 @@ def _strip_frontmatter(text: str) -> tuple[dict[str, str], str]:
     if end == -1:
         return {}, text
     block = text[3:end]
-    body = text[end + 4:].lstrip("\n")
+    body = text[end + 4 :].lstrip("\n")
     meta: dict[str, str] = {}
     for line in block.splitlines():
         line = line.strip()

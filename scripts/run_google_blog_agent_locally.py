@@ -46,7 +46,6 @@ from app.agents.google_blog import (  # noqa: E402
     _extract_via_llm,
     _to_research_discoveries,
     _validate_and_dedupe,
-    run_google_blog_agent,
 )
 from app.schemas import TripParams  # noqa: E402
 from app.signals import extract_signals  # noqa: E402
@@ -206,7 +205,9 @@ async def _run_one(trip: TripParams) -> None:
     print(f"{'=' * 70}")
     passed = len(discoveries) >= 5
     print(f"  Count     : {len(discoveries)} ({'PASS' if passed else 'FAIL — need >= 5'})")
-    print(f"  Vague     : {vague_count} ({'PASS' if vague_count == 0 else 'WARN — vague phrases detected'})")
+    print(
+        f"  Vague     : {vague_count} ({'PASS' if vague_count == 0 else 'WARN — vague phrases detected'})"
+    )
     print(f"  Too short : {short_count} ({'PASS' if short_count == 0 else 'WARN'})")
     sources_used = {d.source for d in discoveries}
     print(f"  Sources   : {sources_used}")

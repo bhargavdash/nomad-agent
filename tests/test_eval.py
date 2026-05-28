@@ -9,10 +9,18 @@ from app.signals import extract_signals
 
 def _trip(**ov) -> TripParams:
     base = dict(
-        trip_id="t1", user_id="u1", destination="Rajasthan, India",
-        date_from="2026-12-20", date_to="2026-12-22", duration_days=2,
-        travelers="2", vibes=["heritage"], accommodation="Heritage Haveli",
-        pace="Balanced", budget="Medium", preferences=None,
+        trip_id="t1",
+        user_id="u1",
+        destination="Rajasthan, India",
+        date_from="2026-12-20",
+        date_to="2026-12-22",
+        duration_days=2,
+        travelers="2",
+        vibes=["heritage"],
+        accommodation="Heritage Haveli",
+        pace="Balanced",
+        budget="Medium",
+        preferences=None,
     )
     base.update(ov)
     return TripParams(**base)
@@ -20,8 +28,14 @@ def _trip(**ov) -> TripParams:
 
 def _stop(name, t="9:00", ap="AM", src="blog", desc="A real, specific stop.") -> AIStop:
     return AIStop(
-        sortOrder=1, time=t, ampm=ap, duration="1h", name=name,
-        description=desc, source=src, tags=["📍"],  # type: ignore[arg-type]
+        sortOrder=1,
+        time=t,
+        ampm=ap,
+        duration="1h",
+        name=name,
+        description=desc,
+        source=src,
+        tags=["📍"],  # type: ignore[arg-type]
     )
 
 
@@ -32,7 +46,10 @@ def _disc(i: int) -> ResearchDiscovery:
 def _good_itinerary() -> AIItinerary:
     days = [
         AIDay(
-            dayNumber=1, city="Jaipur", title="Pink City", description="Forts and bazaars.",
+            dayNumber=1,
+            city="Jaipur",
+            title="Pink City",
+            description="Forts and bazaars.",
             highlights=["Hawa Mahal", "Dal baati at LMB"],
             stops=[
                 _stop("Hawa Mahal", "8:30", "AM"),
@@ -41,7 +58,10 @@ def _good_itinerary() -> AIItinerary:
             ],
         ),
         AIDay(
-            dayNumber=2, city="Jaipur", title="Markets", description="Bazaar crawl.",
+            dayNumber=2,
+            city="Jaipur",
+            title="Markets",
+            description="Bazaar crawl.",
             highlights=["Bandhani at Bapu Bazaar", "Amber Fort"],
             stops=[
                 _stop("Amber Fort", "8:30", "AM"),
@@ -51,7 +71,9 @@ def _good_itinerary() -> AIItinerary:
         ),
     ]
     return AIItinerary(
-        stats_places=6, stats_tips=1, stats_photo_stops=2,
+        stats_places=6,
+        stats_tips=1,
+        stats_photo_stops=2,
         route_summary="Jaipur (2)",
         transport_strategy="Cabs within the city.",
         seasonal_tips=["Pack layers — Dec nights are cold."],
@@ -75,17 +97,23 @@ def test_bad_itinerary_scores_low() -> None:
     trip = _trip()
     days = [
         AIDay(
-            dayNumber=1, city="Jaipur", title="Day 1",
+            dayNumber=1,
+            city="Jaipur",
+            title="Day 1",
             description="A stunning, must-visit day of vibrant culture.",  # banned words
             highlights=["a", "b"],
             stops=[
-                _stop("Lunch in Jaipur", "1:00", "PM", src="maps"),       # filler
-                _stop("Morning coffee in Jaipur", "9:00", "AM", src="maps"),  # filler + out of order
+                _stop("Lunch in Jaipur", "1:00", "PM", src="maps"),  # filler
+                _stop(
+                    "Morning coffee in Jaipur", "9:00", "AM", src="maps"
+                ),  # filler + out of order
             ],
         ),
     ]
     bad = AIItinerary(
-        stats_places=0, stats_tips=0, stats_photo_stops=0,
+        stats_places=0,
+        stats_tips=0,
+        stats_photo_stops=0,
         route_summary="",  # missing
         budget_estimate="",  # missing
         discoveries=[_disc(i) for i in range(3)],
