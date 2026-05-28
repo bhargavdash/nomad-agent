@@ -49,8 +49,8 @@ logger = logging.getLogger(__name__)
 
 MAX_QUERIES = 4
 MAX_RESULTS_PER_QUERY = 5
-MAX_ARTICLES_FOR_LLM = 15          # cap before sending to LLM
-MAX_ARTICLE_CONTENT_CHARS = 500    # trim long excerpts to keep prompts lean
+MAX_ARTICLES_FOR_LLM = 15  # cap before sending to LLM
+MAX_ARTICLE_CONTENT_CHARS = 500  # trim long excerpts to keep prompts lean
 MAX_DISCOVERIES_RETURNED = 8
 MIN_DESCRIPTION_LENGTH = 40
 
@@ -102,13 +102,60 @@ _BLOG_TEMPLATE_RE = re.compile(
 # Used by _has_named_entity_beyond_place_name.
 _CAPWORD_RE = re.compile(r"\b([A-Z][a-zA-Z]{2,})\b")
 _COMMON_NON_ENTITY_CAPS = {
-    "The", "This", "That", "These", "Those", "It", "Its", "If", "For", "With",
-    "When", "Where", "Why", "How", "What", "And", "But", "Or", "So",
-    "Best", "First", "Most", "Local", "Locals", "Tip", "Tips", "Note", "Notes",
-    "Info", "Guide", "Day", "Days", "Visit", "Visiting", "Try",
-    "January", "February", "March", "April", "May", "June", "July", "August",
-    "September", "October", "November", "December",
-    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+    "The",
+    "This",
+    "That",
+    "These",
+    "Those",
+    "It",
+    "Its",
+    "If",
+    "For",
+    "With",
+    "When",
+    "Where",
+    "Why",
+    "How",
+    "What",
+    "And",
+    "But",
+    "Or",
+    "So",
+    "Best",
+    "First",
+    "Most",
+    "Local",
+    "Locals",
+    "Tip",
+    "Tips",
+    "Note",
+    "Notes",
+    "Info",
+    "Guide",
+    "Day",
+    "Days",
+    "Visit",
+    "Visiting",
+    "Try",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
 }
 
 
@@ -318,11 +365,7 @@ def _format_articles_for_prompt(articles: list[TavilyResult]) -> str:
         content = " ".join(a.content.split())
         if len(content) > MAX_ARTICLE_CONTENT_CHARS:
             content = content[:MAX_ARTICLE_CONTENT_CHARS] + "…"
-        block = (
-            f"[{i}] {a.title or '(no title)'}\n"
-            f"  URL: {a.url or '—'}\n"
-            f"  Excerpt: {content}"
-        )
+        block = f"[{i}] {a.title or '(no title)'}\n  URL: {a.url or '—'}\n  Excerpt: {content}"
         blocks.append(block)
     return "\n\n".join(blocks)
 
@@ -444,17 +487,13 @@ async def _extract_anchors_via_llm(
 # ---------------------------------------------------------------------------
 
 
-def _validate_and_dedupe(
-    extracted: list[_BlogPlace], n_articles: int
-) -> list[_BlogPlace]:
+def _validate_and_dedupe(extracted: list[_BlogPlace], n_articles: int) -> list[_BlogPlace]:
     """Drop vague / templated / unsupported discoveries; dedupe by place_name; rank."""
     survivors: list[_BlogPlace] = []
     for place in extracted:
         desc = place.description.strip()
         if len(desc) < MIN_DESCRIPTION_LENGTH:
-            logger.info(
-                "google_agent.validate.drop reason=short place=%r", place.place_name
-            )
+            logger.info("google_agent.validate.drop reason=short place=%r", place.place_name)
             continue
         vmatch = _VAGUE_PHRASE_RE.search(desc)
         if vmatch:
@@ -560,9 +599,7 @@ async def run_google_blog_agent(
         queries = _build_queries(trip_params, signals)
         logger.info("google_agent.start queries=%r", queries)
 
-        articles = await search_fanout(
-            queries, max_results_per_query=MAX_RESULTS_PER_QUERY
-        )
+        articles = await search_fanout(queries, max_results_per_query=MAX_RESULTS_PER_QUERY)
         if not articles:
             logger.warning("google_agent: 0 articles across all queries")
             return []

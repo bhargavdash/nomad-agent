@@ -18,8 +18,11 @@ from app.signals import extract_signals
 
 def _disc(title: str, source: str = "blog") -> ResearchDiscovery:
     return ResearchDiscovery(
-        id=f"id-{title}", title=title, body=f"About {title}.",
-        tags=["t"], source=source,  # type: ignore[arg-type]
+        id=f"id-{title}",
+        title=title,
+        body=f"About {title}.",
+        tags=["t"],
+        source=source,  # type: ignore[arg-type]
     )
 
 
@@ -92,10 +95,18 @@ async def test_corrupt_payload_returns_none(fake_redis) -> None:
 
 def _trip() -> TripParams:
     return TripParams(
-        trip_id="t1", user_id="u1", destination="Goa, India",
-        date_from="2026-12-15", date_to="2026-12-20", duration_days=5,
-        travelers="2", vibes=["beaches"], accommodation="Hotel",
-        pace="Balanced", budget="Medium", preferences=None,
+        trip_id="t1",
+        user_id="u1",
+        destination="Goa, India",
+        date_from="2026-12-15",
+        date_to="2026-12-20",
+        duration_days=5,
+        travelers="2",
+        vibes=["beaches"],
+        accommodation="Hotel",
+        pace="Balanced",
+        budget="Medium",
+        preferences=None,
     )
 
 
@@ -104,9 +115,7 @@ async def test_research_gate_hit_skips_agents(monkeypatch) -> None:
     from app.graph import pipeline
 
     pool = [_disc("Anjuna Beach", "youtube")]
-    monkeypatch.setattr(
-        pipeline.cache, "get_cached_research", AsyncMock(return_value=pool)
-    )
+    monkeypatch.setattr(pipeline.cache, "get_cached_research", AsyncMock(return_value=pool))
     trip = _trip()
     state = {"trip_params": trip, "signals": extract_signals(trip)}
 
@@ -125,9 +134,7 @@ async def test_merge_uses_cached_pool_on_hit(monkeypatch) -> None:
     from app.graph import pipeline
 
     pool = [_disc("Anjuna Beach", "youtube"), _disc("Baga", "reddit")]
-    monkeypatch.setattr(
-        pipeline.supabase_writer, "write_discoveries", AsyncMock(return_value=None)
-    )
+    monkeypatch.setattr(pipeline.supabase_writer, "write_discoveries", AsyncMock(return_value=None))
     trip = _trip()
     out = await pipeline.merge_node(
         {"trip_params": trip, "signals": extract_signals(trip), "research_cache": pool}

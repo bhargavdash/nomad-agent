@@ -64,14 +64,14 @@ async def _run_one(fixture_path: Path) -> None:
     print(f"\n{'=' * 70}")
     print(f"  Fixture: {fixture_path.name}")
     print(f"{'=' * 70}")
-    print(f"\n=== Trip ===")
+    print("\n=== Trip ===")
     print(f"Destination : {trip.destination}")
     print(f"Dates       : {trip.date_from} → {trip.date_to}")
     print(f"Vibes       : {', '.join(trip.vibes)}")
     print(f"Pace        : {trip.pace} | Budget: {trip.budget}")
 
     signals = extract_signals(trip)
-    print(f"\n=== Signals ===")
+    print("\n=== Signals ===")
     print(f"Region              : {signals.region}")
     print(f"Season              : {signals.season}")
     print(f"Crowd level         : {signals.crowd_level}")
@@ -79,11 +79,11 @@ async def _run_one(fixture_path: Path) -> None:
     print(f"Source weights      : {signals.vibe_source_weights}")
     print(f"Query modifiers     : {signals.query_modifiers}")
     if signals.warnings:
-        print(f"Warnings            :")
+        print("Warnings            :")
         for w in signals.warnings:
             print(f"  - {w}")
 
-    print(f"\n=== Running YouTube agent... ===\n")
+    print("\n=== Running YouTube agent... ===\n")
     discoveries = await run_youtube_agent(trip, signals)
 
     print(f"\n=== Discoveries ({len(discoveries)}) ===\n")

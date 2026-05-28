@@ -180,9 +180,7 @@ class RedditBlockedError(Exception):
     """Reddit returned 403 — we're being rate-limited / blocked."""
 
 
-def _filter_by_age(
-    posts: list[RedditPost], max_age_days: int
-) -> list[RedditPost]:
+def _filter_by_age(posts: list[RedditPost], max_age_days: int) -> list[RedditPost]:
     """Drop posts older than max_age_days. Posts with missing/zero created_utc
     are kept (treated as unknown age, not necessarily old)."""
     if max_age_days <= 0:
@@ -198,7 +196,9 @@ def _filter_by_age(
     if dropped:
         logger.info(
             "reddit.filter_by_age dropped=%d kept=%d cutoff_days=%d",
-            dropped, len(fresh), max_age_days,
+            dropped,
+            len(fresh),
+            max_age_days,
         )
     return fresh
 
@@ -247,7 +247,10 @@ async def search_reddit(
                 last_status = e.response.status_code if e.response else None
                 logger.warning(
                     "reddit.search HTTP %s base=%s sub=%s q=%r",
-                    last_status, base, subreddit, query,
+                    last_status,
+                    base,
+                    subreddit,
+                    query,
                 )
                 if last_status in (403, 429):
                     continue  # try old.reddit.com fallback
@@ -255,14 +258,20 @@ async def search_reddit(
             except Exception as e:  # noqa: BLE001
                 logger.warning(
                     "reddit.search err=%s base=%s sub=%s q=%r",
-                    e, base, subreddit, query,
+                    e,
+                    base,
+                    subreddit,
+                    query,
                 )
                 return []
         posts = _parse_listing(payload)
         posts = _filter_by_age(posts, max_age_days)
         logger.info(
             "reddit.search sub=%s q=%r got=%d (via %s)",
-            subreddit, query, len(posts), base,
+            subreddit,
+            query,
+            len(posts),
+            base,
         )
         return posts
 
@@ -270,8 +279,7 @@ async def search_reddit(
     # 429 = rate-limited, 403 = anti-bot. Either way: stop hammering.
     if last_status in (403, 429):
         raise RedditBlockedError(
-            f"Reddit blocked sub={subreddit} q={query!r} "
-            f"({last_status} on both endpoints)"
+            f"Reddit blocked sub={subreddit} q={query!r} ({last_status} on both endpoints)"
         )
     return []
 
@@ -330,15 +338,16 @@ async def search_many_with_rate_limit(
         if i > 0:
             await asyncio.sleep(sleep_seconds)
         try:
-            posts = await search_reddit(
-                q, sub, limit=limit_per_query, user_agent=user_agent
-            )
+            posts = await search_reddit(q, sub, limit=limit_per_query, user_agent=user_agent)
             consecutive_blocks = 0
         except RedditBlockedError as e:
             consecutive_blocks += 1
             logger.warning(
                 "reddit.search blocked sub=%s q=%r (streak=%d): %s",
-                sub, q, consecutive_blocks, e,
+                sub,
+                q,
+                consecutive_blocks,
+                e,
             )
             # After 3 consecutive 403s, abort — Reddit is rate-limiting us
             # and continuing only deepens the block. Return what we have.

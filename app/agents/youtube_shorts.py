@@ -50,18 +50,18 @@ logger = logging.getLogger(__name__)
 # Tunables
 # ---------------------------------------------------------------------------
 
-MAX_RESULTS_PER_QUERY = 15        # API max per call is 50; 15 keeps quota sane
-MAX_DEDUPED_CANDIDATES = 30       # cap pool after dedupe to control LLM tokens
-MAX_VIDEOS_FOR_LLM = 18           # what we actually feed the LLM
-MAX_TRANSCRIPTS_TO_FETCH = 18     # most Shorts have no captions; fetch all candidates
-MIN_VIEW_COUNT = 500              # spam/bot floor
-MIN_LIKE_VIEW_RATIO = 0.003       # 0.3% — lenient; viral mass-market often <0.5%
+MAX_RESULTS_PER_QUERY = 15  # API max per call is 50; 15 keeps quota sane
+MAX_DEDUPED_CANDIDATES = 30  # cap pool after dedupe to control LLM tokens
+MAX_VIDEOS_FOR_LLM = 18  # what we actually feed the LLM
+MAX_TRANSCRIPTS_TO_FETCH = 18  # most Shorts have no captions; fetch all candidates
+MIN_VIEW_COUNT = 500  # spam/bot floor
+MIN_LIKE_VIEW_RATIO = 0.003  # 0.3% — lenient; viral mass-market often <0.5%
 MAX_DISCOVERIES_RETURNED = 8
 
 # Layer 3 — two-pass extraction tunables
-PASS1_BATCH_SIZE = 6              # videos per Pass-1 LLM call (3 calls for 18 videos)
-MAX_MENTIONS_PER_VIDEO = 4        # cap per-video place mentions to avoid spam
-MAX_CLUSTERS_FOR_PASS2 = 14       # top clusters by mention-count fed to Pass 2
+PASS1_BATCH_SIZE = 6  # videos per Pass-1 LLM call (3 calls for 18 videos)
+MAX_MENTIONS_PER_VIDEO = 4  # cap per-video place mentions to avoid spam
+MAX_CLUSTERS_FOR_PASS2 = 14  # top clusters by mention-count fed to Pass 2
 
 # Listicle / clickbait title patterns. Used as a SOFT RANKING SIGNAL —
 # listicle videos are pushed to the bottom of the candidate pool but not
@@ -387,6 +387,7 @@ async def _enrich_with_transcripts(shorts: list[YouTubeShort]) -> None:
 # Pass 1 is allowed to be empty; Pass 2 only sees clusters that exist.
 # ---------------------------------------------------------------------------
 
+
 class _PlaceMention(BaseModel):
     """One atomic place mention from a single video. Pass 1 output."""
 
@@ -655,9 +656,7 @@ def _format_clusters_for_pass2(
         videos = sorted({m.video_index for m in ms})
         cat = ms[0].category if ms else "other"
         hooks = _extract_visual_hooks(ms)
-        hooks_line = (
-            f"\n  visual_hooks: {', '.join(hooks)}" if hooks else ""
-        )
+        hooks_line = f"\n  visual_hooks: {', '.join(hooks)}" if hooks else ""
         header = (
             f"PLACE: {name}\n"
             f"  category: {cat}\n"
@@ -756,20 +755,25 @@ def _validate_and_dedupe(
         if len(body) < MIN_WHY_LENGTH:
             logger.info(
                 "validate.drop reason=short_body chars=%d place=%r body=%r",
-                len(body), d.place_name, body,
+                len(body),
+                d.place_name,
+                body,
             )
             continue
         vmatch = VAGUE_PHRASE_RE.search(body)
         if vmatch:
             logger.info(
                 "validate.drop reason=vague_phrase phrase=%r place=%r body=%r",
-                vmatch.group(0), d.place_name, body,
+                vmatch.group(0),
+                d.place_name,
+                body,
             )
             continue
         if TAUTOLOGY_RE.match(body):
             logger.info(
                 "validate.drop reason=tautology place=%r body=%r",
-                d.place_name, body,
+                d.place_name,
+                body,
             )
             continue
         # Validate evidence indices fall in [1, n_videos].
@@ -777,7 +781,8 @@ def _validate_and_dedupe(
         if not valid_indices:
             logger.info(
                 "validate.drop reason=no_evidence place=%r submitted_indices=%r",
-                d.place_name, d.evidence_short_indices,
+                d.place_name,
+                d.evidence_short_indices,
             )
             continue
         d.evidence_short_indices = valid_indices
@@ -849,10 +854,7 @@ def _to_research_discoveries(
 async def _search_fanout(queries: list[str]) -> list[YouTubeShort]:
     """Run all queries in parallel; dedupe results by video_id (keep first seen)."""
     results = await asyncio.gather(
-        *(
-            search_youtube_shorts(q, max_results=MAX_RESULTS_PER_QUERY)
-            for q in queries
-        ),
+        *(search_youtube_shorts(q, max_results=MAX_RESULTS_PER_QUERY) for q in queries),
         return_exceptions=True,
     )
 
@@ -867,9 +869,7 @@ async def _search_fanout(queries: list[str]) -> list[YouTubeShort]:
                 continue
             seen.add(s.video_id)
             merged.append(s)
-    logger.info(
-        "youtube_agent.fanout queries=%d unique_videos=%d", len(queries), len(merged)
-    )
+    logger.info("youtube_agent.fanout queries=%d unique_videos=%d", len(queries), len(merged))
     return merged
 
 

@@ -15,7 +15,11 @@ logging.basicConfig(
 
 # Import routers AFTER logging.basicConfig so logging is configured before any
 # transitive module-level logger setup runs. (E402 is intentional here.)
+from app.observability import configure_observability  # noqa: E402
 from app.routes.research import router as research_router  # noqa: E402
+
+# Enable LangSmith tracing if configured (bridges .env → os.environ).
+configure_observability()
 
 app = FastAPI(
     title="nomad-agent",

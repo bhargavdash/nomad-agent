@@ -89,8 +89,16 @@ _SOURCE_PRIORITY: dict[SourceType, int] = {
 # Reddit agent — see its `_to_research_discoveries`). Used for stats counting.
 _TIP_TAG_TOKENS = {"tip", "warning", "recommendation"}
 _PHOTO_TAG_TOKENS = {
-    "photo", "photogenic", "view", "viewpoint", "sunset", "sunrise",
-    "scenic", "vista", "lookout", "instagram",
+    "photo",
+    "photogenic",
+    "view",
+    "viewpoint",
+    "sunset",
+    "sunrise",
+    "scenic",
+    "vista",
+    "lookout",
+    "instagram",
 }
 
 # Filler-stop detection (honest stats). A stop counts as a real "place"
@@ -102,15 +110,35 @@ _PHOTO_TAG_TOKENS = {
 # which wrongly discarded real anchors and undercounted the stats badges.
 _PLANNER_PLACEHOLDER_MARK = "suggested by the planner"
 _FILLER_NAME_PREFIXES = (
-    "morning coffee in ", "lunch in ", "dinner in ", "breakfast in ", "brunch in ",
-    "sunset point near ", "evening walk through ",
+    "morning coffee in ",
+    "lunch in ",
+    "dinner in ",
+    "breakfast in ",
+    "brunch in ",
+    "sunset point near ",
+    "evening walk through ",
 )
 _FILLER_NAME_EXACT = {
-    "cultural anchor", "cultural exploration", "cultural spot", "cultural place",
-    "standard anchor", "anchor slot", "local eatery", "local breakfast spot",
-    "local market", "local food", "local cuisine", "neighborhood walk",
-    "neighbourhood walk", "pool time", "relaxation time", "free time",
-    "sunset viewpoint", "evening stroll", "dinner spot", "lunch spot",
+    "cultural anchor",
+    "cultural exploration",
+    "cultural spot",
+    "cultural place",
+    "standard anchor",
+    "anchor slot",
+    "local eatery",
+    "local breakfast spot",
+    "local market",
+    "local food",
+    "local cuisine",
+    "neighborhood walk",
+    "neighbourhood walk",
+    "pool time",
+    "relaxation time",
+    "free time",
+    "sunset viewpoint",
+    "evening stroll",
+    "dinner spot",
+    "lunch spot",
     "breakfast spot",
 }
 _FILLER_OLD_MARKET_RE = re.compile(r"^old\s+.+\s+market walk\s*$", re.IGNORECASE)
@@ -304,27 +332,51 @@ _SYNTH_SYSTEM = load_skill("synthesizer")
 
 # Region/state substrings that imply a multi-city circuit (not a single city).
 _MULTI_CITY_REGION_KEYWORDS = (
-    "rajasthan", "kerala", "himachal", "uttarakhand", "karnataka",
-    "tamil nadu", "tamilnadu", "gujarat", "north india", "south india",
-    "golden triangle", "north east", "northeast", "ladakh",
+    "rajasthan",
+    "kerala",
+    "himachal",
+    "uttarakhand",
+    "karnataka",
+    "tamil nadu",
+    "tamilnadu",
+    "gujarat",
+    "north india",
+    "south india",
+    "golden triangle",
+    "north east",
+    "northeast",
+    "ladakh",
 )
 # Tokens (matched as substrings against vibes + preferences) that flag a
 # food/shopping-forward trip.
 _FOOD_SHOP_TOKENS = (
-    "food", "foodie", "cuisine", "culinary", "street food",
-    "shopping", "market", "bazaar",
+    "food",
+    "foodie",
+    "cuisine",
+    "culinary",
+    "street food",
+    "shopping",
+    "market",
+    "bazaar",
 )
+
+
+# region → region-playbook overlay (only regions we have a playbook for).
+_REGION_OVERLAY = {
+    "india": "regions/india",
+    "europe": "regions/europe",
+    "southeast_asia": "regions/southeast_asia",
+}
 
 
 def _select_overlays(trip_params: TripParams, signals: TravelSignals) -> list[str]:
     """Pick skill-overlay names to append to the synthesizer prompt, by signal."""
     overlays: list[str] = []
     dest = trip_params.destination.lower()
-    if signals.region == "india":
-        overlays.append("regions/india")
-    if trip_params.duration_days >= 4 and any(
-        kw in dest for kw in _MULTI_CITY_REGION_KEYWORDS
-    ):
+    region_overlay = _REGION_OVERLAY.get(signals.region)
+    if region_overlay:
+        overlays.append(region_overlay)
+    if trip_params.duration_days >= 4 and any(kw in dest for kw in _MULTI_CITY_REGION_KEYWORDS):
         overlays.append("trip_shapes/region_multi_city")
     haystack = (" ".join(trip_params.vibes) + " " + (trip_params.preferences or "")).lower()
     if any(tok in haystack for tok in _FOOD_SHOP_TOKENS):
@@ -341,10 +393,7 @@ def _format_candidates(cands: list[_PlaceCandidate]) -> str:
         body = c.body
         if len(body) > 300:
             body = body[:300] + "…"
-        lines.append(
-            f"[{i}] {c.title}  (sources: {sources_tag}{cross})\n"
-            f"    {body}"
-        )
+        lines.append(f"[{i}] {c.title}  (sources: {sources_tag}{cross})\n    {body}")
     return "\n".join(lines)
 
 
@@ -392,9 +441,7 @@ def _build_prompt(
 ) -> tuple[str, str]:
     """Return (system_prompt, user_prompt)."""
     target_per_day = target_counts[0] if target_counts else MIN_STOPS_PER_DAY
-    system = _SYNTH_SYSTEM.format(
-        min_stops=MIN_STOPS_PER_DAY, max_stops=MAX_STOPS_PER_DAY
-    )
+    system = _SYNTH_SYSTEM.format(min_stops=MIN_STOPS_PER_DAY, max_stops=MAX_STOPS_PER_DAY)
     # Append signals-selected skill overlays (region/trip-shape/vibe playbooks).
     # Composed AFTER .format() so overlay braces never collide with format fields.
     overlays = _select_overlays(trip_params, signals)
@@ -473,15 +520,11 @@ async def _extract_via_llm(
     geo_brief: GeoBrief | None = None,
 ) -> _LLMItineraryDraft | None:
     """Single LLM call. Returns None on error so caller can retry or fall back."""
-    system, user = _build_prompt(
-        trip_params, signals, candidates, target_counts, geo_brief
-    )
+    system, user = _build_prompt(trip_params, signals, candidates, target_counts, geo_brief)
     try:
         # Cerebras-235B primary with Groq-70B fallback (see factory). Structured
         # output + provider fallback are composed in get_structured_llm.
-        structured = get_structured_llm(
-            "synthesizer", _LLMItineraryDraft, method="json_mode"
-        )
+        structured = get_structured_llm("synthesizer", _LLMItineraryDraft, method="json_mode")
         messages: list[Any] = [
             SystemMessage(content=system),
             HumanMessage(content=user),
@@ -634,9 +677,7 @@ def _llm_draft_to_itinerary(
                 continue
             seen_stop_names.add(name.lower())
 
-            source, cand = _resolve_stop_source(
-                s.source, s.discovery_title, candidates_by_norm
-            )
+            source, cand = _resolve_stop_source(s.source, s.discovery_title, candidates_by_norm)
             if cand is not None:
                 for did in cand.discovery_ids:
                     if did not in used_discovery_ids:
@@ -650,8 +691,7 @@ def _llm_draft_to_itinerary(
                         ampm=s.ampm,
                         duration=s.duration.strip() or "1h",
                         name=name,
-                        description=s.description.strip()
-                        or "Recommended stop on this day.",
+                        description=s.description.strip() or "Recommended stop on this day.",
                         source=source,
                         tags=_coerce_tags_for_stop(s.tags),
                     )
@@ -668,9 +708,7 @@ def _llm_draft_to_itinerary(
         # carry fixed times — chronology sort below re-orders the whole day.
         pad_city = lday.city.strip() or _fallback_city(candidates)
         while len(ai_stops) < MIN_STOPS_PER_DAY:
-            ai_stops.append(
-                _default_anchor_stop(sort_order, len(ai_stops), pad_city)
-            )
+            ai_stops.append(_default_anchor_stop(sort_order, len(ai_stops), pad_city))
             sort_order += 1
 
         # Sort all stops (LLM-emitted + padding) chronologically and renumber
@@ -701,9 +739,7 @@ def _llm_draft_to_itinerary(
         idx = len(ai_days) + 1
         ai_days.append(_default_anchor_day(idx, _fallback_city(candidates)))
 
-    discoveries_out = _select_output_discoveries(
-        used_discovery_ids, discoveries_by_id
-    )
+    discoveries_out = _select_output_discoveries(used_discovery_ids, discoveries_by_id)
 
     stats_places, stats_tips, stats_photo = _compute_stats(ai_days, discoveries_out)
 
@@ -946,9 +982,7 @@ def _pad_discoveries(
     return out
 
 
-def _compute_stats(
-    days: list[AIDay], discoveries: list[ResearchDiscovery]
-) -> tuple[int, int, int]:
+def _compute_stats(days: list[AIDay], discoveries: list[ResearchDiscovery]) -> tuple[int, int, int]:
     """(stats_places, stats_tips, stats_photo_stops).
 
     Honest, filler-aware counts:
@@ -971,10 +1005,7 @@ def _compute_stats(
             unique_named.add(stop.name.lower())
             referenced_titles.add(stop.name.lower())
             tag_text = " ".join(t.lower() for t in stop.tags)
-            is_photo = (
-                stop.source == "youtube"
-                or any(tok in tag_text for tok in _PHOTO_TAG_TOKENS)
-            )
+            is_photo = stop.source == "youtube" or any(tok in tag_text for tok in _PHOTO_TAG_TOKENS)
             if is_photo:
                 photo += 1
 
@@ -990,8 +1021,7 @@ def _compute_stats(
         if not title_lc:
             continue
         if title_lc in referenced_titles or any(
-            title_lc in stop_name or stop_name in title_lc
-            for stop_name in referenced_titles
+            title_lc in stop_name or stop_name in title_lc for stop_name in referenced_titles
         ):
             tips += 1
 
@@ -1017,9 +1047,7 @@ async def run_synthesizer(
     """
     candidates = _dedupe_for_prompt(discoveries)
     discoveries_by_id = {d.id: d for d in discoveries}
-    target_counts = _target_stop_counts(
-        trip_params.duration_days, signals.pace_density
-    )
+    target_counts = _target_stop_counts(trip_params.duration_days, signals.pace_density)
 
     logger.info(
         "synthesizer.start destination=%r discoveries=%d candidates=%d days=%d pace=%d",
@@ -1041,9 +1069,7 @@ async def run_synthesizer(
         return _skeleton_itinerary(trip_params, candidates, discoveries, signals)
 
     for attempt in range(1, MAX_LLM_ATTEMPTS + 1):
-        draft = await _extract_via_llm(
-            trip_params, signals, candidates, target_counts, geo_brief
-        )
+        draft = await _extract_via_llm(trip_params, signals, candidates, target_counts, geo_brief)
         if draft is None:
             logger.warning(
                 "synthesizer: LLM call returned None on attempt %d/%d",

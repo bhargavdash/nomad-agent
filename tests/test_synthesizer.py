@@ -251,13 +251,15 @@ def _stop(
 def test_compute_stats_places_counts_unique_non_maps_stops() -> None:
     # Honest count (BENCHMARK §6 P1 fix): maps-source stops are filler, not
     # researched places, and must NOT contribute to stats_places.
-    day = _build_day([
-        _stop(sort_order=1, name="Anjuna", source="youtube"),
-        _stop(sort_order=2, name="Anjuna", source="youtube"),  # duplicate
-        _stop(sort_order=3, name="Baga", source="reddit"),
-        _stop(sort_order=4, name="Cultural anchor", source="maps"),  # filler
-        _stop(sort_order=5, name="Local breakfast spot", source="maps"),  # filler
-    ])
+    day = _build_day(
+        [
+            _stop(sort_order=1, name="Anjuna", source="youtube"),
+            _stop(sort_order=2, name="Anjuna", source="youtube"),  # duplicate
+            _stop(sort_order=3, name="Baga", source="reddit"),
+            _stop(sort_order=4, name="Cultural anchor", source="maps"),  # filler
+            _stop(sort_order=5, name="Local breakfast spot", source="maps"),  # filler
+        ]
+    )
     places, _, _ = _compute_stats([day], discoveries=[])
     assert places == 2  # Anjuna + Baga only — both maps stops excluded
 
@@ -265,11 +267,13 @@ def test_compute_stats_places_counts_unique_non_maps_stops() -> None:
 def test_compute_stats_tips_only_counts_tips_used_as_stops() -> None:
     # Honest count (BENCHMARK §6 P2 fix): a tip discovery only contributes to
     # stats_tips if its title is actually referenced by a non-maps stop.
-    day = _build_day([
-        _stop(sort_order=1, name="Anjuna Flea Market scams", source="reddit"),
-        _stop(sort_order=2, name="Old Manali cafés", source="reddit"),
-        _stop(sort_order=3, name="Cultural anchor", source="maps"),  # filler
-    ])
+    day = _build_day(
+        [
+            _stop(sort_order=1, name="Anjuna Flea Market scams", source="reddit"),
+            _stop(sort_order=2, name="Old Manali cafés", source="reddit"),
+            _stop(sort_order=3, name="Cultural anchor", source="maps"),  # filler
+        ]
+    )
     discoveries = [
         # Used as stop → counts.
         _disc(title="Anjuna Flea Market scams", tags=["tip"], source="reddit"),
@@ -289,24 +293,28 @@ def test_compute_stats_counts_real_maps_anchors_excludes_filler() -> None:
     # padding (description sentinel) and generic labels are not.
     from app.agents.synthesizer import _compute_stats, _default_anchor_stop
 
-    day = _build_day([
-        _stop(sort_order=1, name="Amber Fort", source="maps"),       # real anchor
-        _stop(sort_order=2, name="Mehrangarh Fort", source="maps"),  # real anchor
-        _default_anchor_stop(3, 2, "Jaipur"),                        # planner padding
-        _stop(sort_order=4, name="Cultural anchor", source="maps"),  # generic label
-    ])
+    day = _build_day(
+        [
+            _stop(sort_order=1, name="Amber Fort", source="maps"),  # real anchor
+            _stop(sort_order=2, name="Mehrangarh Fort", source="maps"),  # real anchor
+            _default_anchor_stop(3, 2, "Jaipur"),  # planner padding
+            _stop(sort_order=4, name="Cultural anchor", source="maps"),  # generic label
+        ]
+    )
     places, _, _ = _compute_stats([day], discoveries=[])
     assert places == 2  # two real forts; padding + "Cultural anchor" excluded
 
 
 def test_compute_stats_photo_stops_ignores_maps_stops() -> None:
-    day = _build_day([
-        _stop(sort_order=1, name="A", source="youtube", tags=["☕"]),
-        _stop(sort_order=2, name="B", source="reddit", tags=["viewpoint"]),
-        _stop(sort_order=3, name="C", source="blog", tags=["🍽️"]),
-        # A maps anchor with a "viewpoint" tag is still filler — don't count.
-        _stop(sort_order=4, name="Sunset viewpoint", source="maps", tags=["viewpoint"]),
-    ])
+    day = _build_day(
+        [
+            _stop(sort_order=1, name="A", source="youtube", tags=["☕"]),
+            _stop(sort_order=2, name="B", source="reddit", tags=["viewpoint"]),
+            _stop(sort_order=3, name="C", source="blog", tags=["🍽️"]),
+            # A maps anchor with a "viewpoint" tag is still filler — don't count.
+            _stop(sort_order=4, name="Sunset viewpoint", source="maps", tags=["viewpoint"]),
+        ]
+    )
     _, _, photo = _compute_stats([day], discoveries=[])
     assert photo == 2  # youtube + reddit/viewpoint, maps/viewpoint excluded
 
@@ -317,17 +325,17 @@ def test_compute_stats_photo_stops_ignores_maps_stops() -> None:
 
 
 def _cands_for(titles_with_sources: list[tuple[str, str]]) -> list[_PlaceCandidate]:
-    return _dedupe_for_prompt(
-        [_disc(title=t, source=s) for t, s in titles_with_sources]
-    )
+    return _dedupe_for_prompt([_disc(title=t, source=s) for t, s in titles_with_sources])
 
 
 def test_llm_draft_maps_stops_to_candidates_by_title() -> None:
-    cands = _cands_for([
-        ("Anjuna Beach", "youtube"),
-        ("Tito's Lane", "reddit"),
-        ("Fontainhas", "blog"),
-    ])
+    cands = _cands_for(
+        [
+            ("Anjuna Beach", "youtube"),
+            ("Tito's Lane", "reddit"),
+            ("Fontainhas", "blog"),
+        ]
+    )
     discoveries_by_id = {d.id: d for c in cands for d in []} | {
         c.discovery_ids[0]: ResearchDiscovery(
             id=c.discovery_ids[0],
@@ -433,9 +441,7 @@ def test_llm_draft_pads_days_when_under_target() -> None:
             _llm_day(
                 day_number=1,
                 stops=[
-                    _llm_stop(
-                        name="Anjuna", discovery_title="Anjuna", source="youtube"
-                    ),
+                    _llm_stop(name="Anjuna", discovery_title="Anjuna", source="youtube"),
                 ],
             ),
         ],
@@ -465,9 +471,7 @@ def test_llm_draft_pads_stops_within_a_day() -> None:
             _llm_day(
                 day_number=1,
                 stops=[
-                    _llm_stop(
-                        name="Anjuna", discovery_title="Anjuna", source="youtube"
-                    ),
+                    _llm_stop(name="Anjuna", discovery_title="Anjuna", source="youtube"),
                 ],
             ),
         ],
@@ -528,9 +532,7 @@ def test_llm_draft_no_stop_appears_on_two_days() -> None:
                 stops=[
                     _llm_stop(name="Anjuna", discovery_title="Anjuna", source="youtube"),
                     _llm_stop(name="Baga", discovery_title="Baga", source="reddit"),
-                    _llm_stop(
-                        name="Fontainhas", discovery_title="Fontainhas", source="blog"
-                    ),
+                    _llm_stop(name="Fontainhas", discovery_title="Fontainhas", source="blog"),
                 ],
             ),
             _llm_day(
@@ -538,9 +540,7 @@ def test_llm_draft_no_stop_appears_on_two_days() -> None:
                 stops=[
                     _llm_stop(name="Anjuna", discovery_title="Anjuna", source="youtube"),
                     _llm_stop(name="Baga", discovery_title="Baga", source="reddit"),
-                    _llm_stop(
-                        name="Fontainhas", discovery_title="Fontainhas", source="blog"
-                    ),
+                    _llm_stop(name="Fontainhas", discovery_title="Fontainhas", source="blog"),
                 ],
             ),
         ],
@@ -549,9 +549,7 @@ def test_llm_draft_no_stop_appears_on_two_days() -> None:
     names_seen: set[str] = set()
     for day in itin.days:
         for stop in day.stops:
-            assert stop.name.lower() not in names_seen, (
-                f"{stop.name!r} appeared on multiple days"
-            )
+            assert stop.name.lower() not in names_seen, f"{stop.name!r} appeared on multiple days"
             names_seen.add(stop.name.lower())
 
 
@@ -652,9 +650,7 @@ async def test_run_synthesizer_happy_path_with_mocked_llm() -> None:
 async def test_run_synthesizer_retries_on_validation_error_then_succeeds() -> None:
     trip = _trip(duration_days=1)
     signals = extract_signals(trip)
-    discoveries = [
-        _disc(title=f"Place {i}", source="youtube") for i in range(3)
-    ]
+    discoveries = [_disc(title=f"Place {i}", source="youtube") for i in range(3)]
     # First draft is simulated by returning None from _extract_via_llm (the
     # mock's side_effect below); the GOOD second draft is what we map.
     good_draft = _LLMItineraryDraft(
@@ -692,9 +688,7 @@ async def test_run_synthesizer_retries_on_validation_error_then_succeeds() -> No
 async def test_run_synthesizer_falls_back_to_skeleton_on_repeated_failure() -> None:
     trip = _trip(duration_days=2)
     signals = extract_signals(trip)
-    discoveries = [
-        _disc(title=f"Place {i}", source="youtube") for i in range(4)
-    ]
+    discoveries = [_disc(title=f"Place {i}", source="youtube") for i in range(4)]
     # Every LLM call returns None.
     mock = AsyncMock(return_value=None)
     with patch("app.agents.synthesizer._extract_via_llm", mock):
@@ -776,9 +770,7 @@ async def test_run_synthesizer_preserves_source_traceability() -> None:
             )
         ],
     )
-    with patch(
-        "app.agents.synthesizer._extract_via_llm", AsyncMock(return_value=draft)
-    ):
+    with patch("app.agents.synthesizer._extract_via_llm", AsyncMock(return_value=draft)):
         itin = await run_synthesizer(trip, signals, discoveries)
 
     # Each input discovery should be present in the output discoveries.
@@ -805,10 +797,12 @@ def test_llm_draft_sorts_stops_chronologically_within_a_day() -> None:
     receive sortOrder 1, 2, 3 in emission order. After the fix, sortOrder
     must follow clock time.
     """
-    cands = _cands_for([
-        ("Anjuna Flea Market", "youtube"),
-        ("Purple Martini", "reddit"),
-    ])
+    cands = _cands_for(
+        [
+            ("Anjuna Flea Market", "youtube"),
+            ("Purple Martini", "reddit"),
+        ]
+    )
     by_id = {
         c.discovery_ids[0]: ResearchDiscovery(
             id=c.discovery_ids[0],
@@ -850,9 +844,9 @@ def test_llm_draft_sorts_stops_chronologically_within_a_day() -> None:
     # sortOrder must follow clock time. Convert each stop's time+ampm to
     # minutes and assert non-decreasing across sortOrder.
     from app.agents.synthesizer import _time_to_minutes
+
     times_in_order = [
-        _time_to_minutes(s.time, s.ampm)
-        for s in sorted(stops, key=lambda s: s.sortOrder)
+        _time_to_minutes(s.time, s.ampm) for s in sorted(stops, key=lambda s: s.sortOrder)
     ]
     assert times_in_order == sorted(times_in_order), (
         f"Stops out of chronological order: {[(s.sortOrder, s.time, s.ampm) for s in stops]}"
@@ -865,9 +859,10 @@ def test_llm_draft_sorts_stops_chronologically_within_a_day() -> None:
 
 def test_time_to_minutes_handles_12hour_edge_cases() -> None:
     from app.agents.synthesizer import _time_to_minutes
-    assert _time_to_minutes("12:00", "AM") == 0       # midnight
-    assert _time_to_minutes("12:30", "AM") == 30      # 00:30
-    assert _time_to_minutes("9:00", "AM") == 9 * 60   # 09:00
+
+    assert _time_to_minutes("12:00", "AM") == 0  # midnight
+    assert _time_to_minutes("12:30", "AM") == 30  # 00:30
+    assert _time_to_minutes("9:00", "AM") == 9 * 60  # 09:00
     assert _time_to_minutes("12:00", "PM") == 12 * 60  # noon
     assert _time_to_minutes("1:00", "PM") == 13 * 60  # 13:00
     assert _time_to_minutes("11:30", "PM") == 23 * 60 + 30  # 23:30
@@ -884,6 +879,7 @@ def test_synth_prompt_contains_warning_surfacing_rule() -> None:
     is non-empty. This catches accidental prompt regressions.
     """
     from app.agents.synthesizer import _SYNTH_SYSTEM
+
     lowered = _SYNTH_SYSTEM.lower()
     assert "warning" in lowered
     # The rule fires only when warnings exist — make sure the conditional is
@@ -896,11 +892,10 @@ def test_synth_prompt_says_target_is_upper_bound() -> None:
     Catches accidental regression of the BENCHMARK §7 over-padding behavior.
     """
     from app.agents.synthesizer import _SYNTH_SYSTEM
+
     lowered = _SYNTH_SYSTEM.lower()
     assert "upper bound" in lowered
-    assert "do not invent filler" in lowered or "do not pad" in lowered or (
-        "never pad" in lowered
-    )
+    assert "do not invent filler" in lowered or "do not pad" in lowered or ("never pad" in lowered)
 
 
 # ---------------------------------------------------------------------------
@@ -920,13 +915,9 @@ def test_build_prompt_includes_traveler_preferences() -> None:
         _target_stop_counts,
     )
 
-    trip = _trip(
-        preferences="we love local markets and street food, avoid touristy buffets"
-    )
+    trip = _trip(preferences="we love local markets and street food, avoid touristy buffets")
     signals = extract_signals(trip)
-    cands = _dedupe_for_prompt(
-        [_disc(title=f"Place {i}", source="youtube") for i in range(4)]
-    )
+    cands = _dedupe_for_prompt([_disc(title=f"Place {i}", source="youtube") for i in range(4)])
     counts = _target_stop_counts(trip.duration_days, signals.pace_density)
     _system, user = _build_prompt(trip, signals, cands, counts)
     assert "local markets and street food" in user
@@ -942,9 +933,7 @@ def test_build_prompt_omits_preferences_block_when_empty() -> None:
 
     trip = _trip(preferences=None)
     signals = extract_signals(trip)
-    cands = _dedupe_for_prompt(
-        [_disc(title=f"Place {i}", source="youtube") for i in range(4)]
-    )
+    cands = _dedupe_for_prompt([_disc(title=f"Place {i}", source="youtube") for i in range(4)])
     counts = _target_stop_counts(trip.duration_days, signals.pace_density)
     _system, user = _build_prompt(trip, signals, cands, counts)
     assert "HIGHEST PRIORITY" not in user
@@ -982,19 +971,24 @@ def test_select_overlays_rajasthan_food_trip() -> None:
     assert "vibes/food_and_markets" in overlays
 
 
-def test_select_overlays_single_city_non_food() -> None:
+def test_select_overlays_europe_and_sea_regions() -> None:
     from app.agents.synthesizer import _select_overlays
 
-    trip = _trip(
+    paris = _trip(
         destination="Paris, France",
         duration_days=4,
         vibes=["art", "architecture"],
         preferences=None,
     )
-    signals = extract_signals(trip)
-    overlays = _select_overlays(trip, signals)
-    # Not India, not a multi-city region keyword, no food/shopping vibe.
-    assert overlays == []
+    assert _select_overlays(paris, extract_signals(paris)) == ["regions/europe"]
+
+    bali = _trip(
+        destination="Bali, Indonesia",
+        duration_days=6,
+        vibes=["beaches", "relaxation"],
+        preferences=None,
+    )
+    assert _select_overlays(bali, extract_signals(bali)) == ["regions/southeast_asia"]
 
 
 def test_build_prompt_appends_selected_overlays() -> None:
@@ -1010,9 +1004,7 @@ def test_build_prompt_appends_selected_overlays() -> None:
         vibes=["heritage", "local cuisine"],
     )
     signals = extract_signals(trip)
-    cands = _dedupe_for_prompt(
-        [_disc(title=f"Place {i}", source="youtube") for i in range(4)]
-    )
+    cands = _dedupe_for_prompt([_disc(title=f"Place {i}", source="youtube") for i in range(4)])
     counts = _target_stop_counts(trip.duration_days, signals.pace_density)
     system, _user = _build_prompt(trip, signals, cands, counts)
     # Overlay text composed in, AND base prompt format fields resolved.
@@ -1064,9 +1056,7 @@ def test_llm_draft_maps_trip_level_fields() -> None:
             )
         ],
     )
-    itin = _llm_draft_to_itinerary(
-        draft, cands, by_id, duration_days=1, signals=signals
-    )
+    itin = _llm_draft_to_itinerary(draft, cands, by_id, duration_days=1, signals=signals)
     assert itin.route_summary == "North Goa (2) → South Goa (1)"
     assert itin.transport_strategy.startswith("Scooter")
     assert itin.stay_by_city == {"North Goa": "Assagao boutique guesthouse"}
@@ -1087,9 +1077,7 @@ def test_build_prompt_includes_geo_brief_when_present() -> None:
 
     trip = _trip(destination="Rajasthan, India", duration_days=4)
     signals = extract_signals(trip)
-    cands = _dedupe_for_prompt(
-        [_disc(title=f"Place {i}", source="youtube") for i in range(4)]
-    )
+    cands = _dedupe_for_prompt([_disc(title=f"Place {i}", source="youtube") for i in range(4)])
     counts = _target_stop_counts(trip.duration_days, signals.pace_density)
     brief = GeoBrief(
         ordered_cities=["Jaipur", "Jodhpur"],

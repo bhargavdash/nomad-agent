@@ -96,9 +96,7 @@ class YouTubeShort:
 # ISO 8601 duration parser (YouTube returns durations like "PT45S", "PT1M30S")
 # ---------------------------------------------------------------------------
 
-_ISO8601_RE = re.compile(
-    r"^PT(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?$"
-)
+_ISO8601_RE = re.compile(r"^PT(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?$")
 
 
 def parse_iso8601_duration(duration: str) -> int:
@@ -119,9 +117,7 @@ def parse_iso8601_duration(duration: str) -> int:
 # ---------------------------------------------------------------------------
 
 
-async def _search_short_videos(
-    query: str, max_results: int, api_key: str
-) -> list[str]:
+async def _search_short_videos(query: str, max_results: int, api_key: str) -> list[str]:
     """Call search.list with videoDuration=short. Returns a list of videoIds."""
     params = {
         "part": "id",
@@ -140,15 +136,11 @@ async def _search_short_videos(
         data = resp.json()
 
     return [
-        item["id"]["videoId"]
-        for item in data.get("items", [])
-        if item.get("id", {}).get("videoId")
+        item["id"]["videoId"] for item in data.get("items", []) if item.get("id", {}).get("videoId")
     ]
 
 
-async def _fetch_video_details(
-    video_ids: list[str], api_key: str
-) -> list[dict[str, Any]]:
+async def _fetch_video_details(video_ids: list[str], api_key: str) -> list[dict[str, Any]]:
     """Call videos.list (batched up to 50 IDs) → contentDetails + snippet + statistics."""
     if not video_ids:
         return []
@@ -232,9 +224,7 @@ async def search_youtube_shorts(
     """
     key = api_key or settings.YOUTUBE_API_KEY
     if not key:
-        raise RuntimeError(
-            "YOUTUBE_API_KEY is not set — cannot run YouTube Shorts search."
-        )
+        raise RuntimeError("YOUTUBE_API_KEY is not set — cannot run YouTube Shorts search.")
 
     logger.info("youtube.search query=%r max=%d", query, max_results)
     video_ids = await _search_short_videos(query, max_results, key)
@@ -260,9 +250,7 @@ async def search_youtube_shorts(
 # ---------------------------------------------------------------------------
 
 
-async def _search_medium_videos(
-    query: str, max_results: int, api_key: str
-) -> list[str]:
+async def _search_medium_videos(query: str, max_results: int, api_key: str) -> list[str]:
     """search.list with videoDuration=medium (4-20 min by YouTube definition)."""
     params = {
         "part": "id",
@@ -280,9 +268,7 @@ async def _search_medium_videos(
         resp.raise_for_status()
         data = resp.json()
     return [
-        item["id"]["videoId"]
-        for item in data.get("items", [])
-        if item.get("id", {}).get("videoId")
+        item["id"]["videoId"] for item in data.get("items", []) if item.get("id", {}).get("videoId")
     ]
 
 
@@ -345,9 +331,7 @@ async def search_youtube_longform(
     """
     key = api_key or settings.YOUTUBE_API_KEY
     if not key:
-        raise RuntimeError(
-            "YOUTUBE_API_KEY is not set — cannot run YouTube long-form search."
-        )
+        raise RuntimeError("YOUTUBE_API_KEY is not set — cannot run YouTube long-form search.")
     logger.info("youtube.longform.search query=%r max=%d", query, max_results)
     video_ids = await _search_medium_videos(query, max_results, key)
     if not video_ids:

@@ -6,13 +6,12 @@ no API keys and no network.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from app.agents.youtube_shorts import (
     _ExtractedDiscovery,
-    _ExtractionResult,
     _build_queries,
     _build_query,
     _filter_quality,
@@ -370,8 +369,7 @@ async def test_run_youtube_agent_happy_path_with_mocks() -> None:
         _ExtractedDiscovery(
             place_name="Cabo de Rama Fort",
             why_specific=(
-                "Clifftop ruins on the south coast, quieter alternative "
-                "to Chapora. Free entry."
+                "Clifftop ruins on the south coast, quieter alternative to Chapora. Free entry."
             ),
             best_time="sunset",
             practical_tip="Free entry",
@@ -475,9 +473,8 @@ def test_normalize_place_key_collapses_punctuation_and_case() -> None:
     from app.agents.youtube_shorts import _normalize_place_key
 
     assert _normalize_place_key("Anjuna Flea Market") == "anjuna flea market"
-    assert (
-        _normalize_place_key("Anjuna  Flea  Market!")
-        == _normalize_place_key("anjuna flea market")
+    assert _normalize_place_key("Anjuna  Flea  Market!") == _normalize_place_key(
+        "anjuna flea market"
     )
 
 
@@ -525,25 +522,31 @@ def test_cluster_mentions_drops_destination_clusters() -> None:
 
     mentions = [
         _PlaceMention(
-            video_index=1, place_name="Rajasthan", quote="Rajasthan trip",
+            video_index=1,
+            place_name="Rajasthan",
+            quote="Rajasthan trip",
             category="region",
         ),
         _PlaceMention(
-            video_index=2, place_name="India", quote="India travel",
+            video_index=2,
+            place_name="India",
+            quote="India travel",
             category="country",
         ),
         _PlaceMention(
-            video_index=3, place_name="Hawa Mahal", quote="Hawa Mahal Jaipur",
+            video_index=3,
+            place_name="Hawa Mahal",
+            quote="Hawa Mahal Jaipur",
             category="palace",
         ),
         _PlaceMention(
-            video_index=4, place_name="Hawa Mahal", quote="iconic facade",
+            video_index=4,
+            place_name="Hawa Mahal",
+            quote="iconic facade",
             category="palace",
         ),
     ]
-    clusters = _cluster_mentions(
-        mentions, n_videos=10, destination="Rajasthan, India"
-    )
+    clusters = _cluster_mentions(mentions, n_videos=10, destination="Rajasthan, India")
     assert len(clusters) == 1
     assert clusters[0][0] == "Hawa Mahal"
 

@@ -73,16 +73,16 @@ logger = logging.getLogger(__name__)
 # Tunables (long-form specific — see youtube_shorts.py for the Shorts values)
 # ---------------------------------------------------------------------------
 
-MAX_RESULTS_PER_QUERY = 12        # 4 queries × 12 = 48 candidates max
+MAX_RESULTS_PER_QUERY = 12  # 4 queries × 12 = 48 candidates max
 MAX_DEDUPED_CANDIDATES = 20
-MAX_VIDEOS_FOR_LLM = 10           # smaller than Shorts (18) — transcripts are bigger
-MAX_TRANSCRIPTS_TO_FETCH = 20     # try more; transcript availability is the gate
-TRANSCRIPT_MAX_CHARS = 3000       # bigger than Shorts (800) — long-form has real content
-MIN_VIEW_COUNT = 1000             # higher floor; long-form gets more reach naturally
-MIN_LIKE_VIEW_RATIO = 0.001       # 0.1% — long-form ratios run lower than Shorts
+MAX_VIDEOS_FOR_LLM = 10  # smaller than Shorts (18) — transcripts are bigger
+MAX_TRANSCRIPTS_TO_FETCH = 20  # try more; transcript availability is the gate
+TRANSCRIPT_MAX_CHARS = 3000  # bigger than Shorts (800) — long-form has real content
+MIN_VIEW_COUNT = 1000  # higher floor; long-form gets more reach naturally
+MIN_LIKE_VIEW_RATIO = 0.001  # 0.1% — long-form ratios run lower than Shorts
 MAX_DISCOVERIES_RETURNED = 8
-PASS1_BATCH_SIZE = 3              # smaller batches than Shorts — transcripts are 3-4× longer
-MAX_MENTIONS_PER_VIDEO = 6        # long-form videos mention more places legitimately
+PASS1_BATCH_SIZE = 3  # smaller batches than Shorts — transcripts are 3-4× longer
+MAX_MENTIONS_PER_VIDEO = 6  # long-form videos mention more places legitimately
 
 # Stricter listicle regex than Shorts'. Long-form SEO patterns differ — they
 # include "ultimate guide", "everything you need", "complete" prefixes, and
@@ -228,9 +228,7 @@ async def _enrich_with_transcripts(videos: list[YouTubeShort]) -> list[YouTubeSh
     targets = videos[:MAX_TRANSCRIPTS_TO_FETCH]
 
     async def _fetch_one(short: YouTubeShort) -> None:
-        text = await asyncio.to_thread(
-            fetch_transcript_safe, short.video_id, TRANSCRIPT_MAX_CHARS
-        )
+        text = await asyncio.to_thread(fetch_transcript_safe, short.video_id, TRANSCRIPT_MAX_CHARS)
         if text:
             short.transcript = text
 
@@ -238,7 +236,8 @@ async def _enrich_with_transcripts(videos: list[YouTubeShort]) -> list[YouTubeSh
     with_transcripts = [v for v in targets if v.transcript]
     logger.info(
         "youtube_longform.transcripts kept %d/%d (mandatory gate)",
-        len(with_transcripts), len(targets),
+        len(with_transcripts),
+        len(targets),
     )
     return with_transcripts
 
@@ -286,9 +285,7 @@ async def _pass1_extract_batch(
             kept.append(m)
         return kept
     except Exception as e:  # noqa: BLE001
-        logger.warning(
-            "youtube_longform.pass1_batch_failed offset=%d err=%s", offset, e
-        )
+        logger.warning("youtube_longform.pass1_batch_failed offset=%d err=%s", offset, e)
         return []
 
 
@@ -299,10 +296,7 @@ async def _pass1_extract_all(
     for start in range(0, len(videos), PASS1_BATCH_SIZE):
         batches.append((start + 1, videos[start : start + PASS1_BATCH_SIZE]))
     results = await asyncio.gather(
-        *(
-            _pass1_extract_batch(trip_params, batch, offset)
-            for offset, batch in batches
-        ),
+        *(_pass1_extract_batch(trip_params, batch, offset) for offset, batch in batches),
         return_exceptions=True,
     )
     mentions: list[_PlaceMention] = []
@@ -310,9 +304,7 @@ async def _pass1_extract_all(
         if isinstance(r, BaseException):
             continue
         mentions.extend(r)
-    logger.info(
-        "youtube_longform.pass1 batches=%d mentions=%d", len(batches), len(mentions)
-    )
+    logger.info("youtube_longform.pass1 batches=%d mentions=%d", len(batches), len(mentions))
     return mentions
 
 
@@ -411,19 +403,14 @@ def _to_research_discoveries(
 
 async def _search_fanout(queries: list[str]) -> list[YouTubeShort]:
     results = await asyncio.gather(
-        *(
-            search_youtube_longform(q, max_results=MAX_RESULTS_PER_QUERY)
-            for q in queries
-        ),
+        *(search_youtube_longform(q, max_results=MAX_RESULTS_PER_QUERY) for q in queries),
         return_exceptions=True,
     )
     seen: set[str] = set()
     merged: list[YouTubeShort] = []
     for q, res in zip(queries, results):
         if isinstance(res, BaseException):
-            logger.warning(
-                "youtube_longform.search_failed query=%r err=%s", q, res
-            )
+            logger.warning("youtube_longform.search_failed query=%r err=%s", q, res)
             continue
         for s in res:
             if s.video_id in seen:
@@ -432,7 +419,8 @@ async def _search_fanout(queries: list[str]) -> list[YouTubeShort]:
             merged.append(s)
     logger.info(
         "youtube_longform.fanout queries=%d unique_videos=%d",
-        len(queries), len(merged),
+        len(queries),
+        len(merged),
     )
     return merged
 
@@ -457,15 +445,14 @@ async def run_youtube_longform_agent(
 
         videos = await _search_fanout(queries)
         if not videos:
-            logger.warning(
-                "youtube_longform: 0 unique videos across all queries"
-            )
+            logger.warning("youtube_longform: 0 unique videos across all queries")
             return []
 
         filtered = _filter_quality(videos)
         logger.info(
             "youtube_longform: %d videos after quality filter (from %d)",
-            len(filtered), len(videos),
+            len(filtered),
+            len(videos),
         )
         if not filtered:
             return []
@@ -473,9 +460,7 @@ async def run_youtube_longform_agent(
         # Transcripts are the hard gate — videos without captions are dropped.
         with_transcripts = await _enrich_with_transcripts(filtered)
         if not with_transcripts:
-            logger.warning(
-                "youtube_longform: 0 videos had transcripts — nothing to extract"
-            )
+            logger.warning("youtube_longform: 0 videos had transcripts — nothing to extract")
             return []
 
         candidates = with_transcripts[:MAX_VIDEOS_FOR_LLM]
@@ -488,7 +473,9 @@ async def run_youtube_longform_agent(
         discoveries = _to_research_discoveries(validated)
         logger.info(
             "youtube_longform.done extracted=%d kept=%d returned=%d",
-            len(extracted), len(validated), len(discoveries),
+            len(extracted),
+            len(validated),
+            len(discoveries),
         )
         return discoveries
 

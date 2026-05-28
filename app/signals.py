@@ -78,31 +78,103 @@ class TravelSignals:
 
 _REGION_KEYWORDS: dict[str, tuple[str, ...]] = {
     "india": (
-        "india", "goa", "manali", "jaipur", "delhi", "mumbai", "bangalore",
-        "kerala", "ladakh", "kashmir", "rajasthan", "varanasi", "udaipur",
-        "chennai", "pushkar", "rishikesh", "agra", "darjeeling", "shimla",
+        "india",
+        "goa",
+        "manali",
+        "jaipur",
+        "delhi",
+        "mumbai",
+        "bangalore",
+        "kerala",
+        "ladakh",
+        "kashmir",
+        "rajasthan",
+        "varanasi",
+        "udaipur",
+        "chennai",
+        "pushkar",
+        "rishikesh",
+        "agra",
+        "darjeeling",
+        "shimla",
     ),
     "southeast_asia": (
-        "bali", "indonesia", "thailand", "bangkok", "phuket", "vietnam",
-        "hanoi", "ho chi minh", "singapore", "malaysia", "kuala lumpur",
-        "philippines", "manila", "cambodia", "angkor", "laos", "myanmar",
+        "bali",
+        "indonesia",
+        "thailand",
+        "bangkok",
+        "phuket",
+        "vietnam",
+        "hanoi",
+        "ho chi minh",
+        "singapore",
+        "malaysia",
+        "kuala lumpur",
+        "philippines",
+        "manila",
+        "cambodia",
+        "angkor",
+        "laos",
+        "myanmar",
         "sri lanka",
     ),
     "europe": (
-        "paris", "france", "italy", "rome", "milan", "venice", "florence",
-        "spain", "madrid", "barcelona", "germany", "berlin", "munich",
-        "london", "uk", "england", "scotland", "amsterdam", "netherlands",
-        "greece", "athens", "santorini", "portugal", "lisbon", "switzerland",
-        "vienna", "prague", "budapest",
+        "paris",
+        "france",
+        "italy",
+        "rome",
+        "milan",
+        "venice",
+        "florence",
+        "spain",
+        "madrid",
+        "barcelona",
+        "germany",
+        "berlin",
+        "munich",
+        "london",
+        "uk",
+        "england",
+        "scotland",
+        "amsterdam",
+        "netherlands",
+        "greece",
+        "athens",
+        "santorini",
+        "portugal",
+        "lisbon",
+        "switzerland",
+        "vienna",
+        "prague",
+        "budapest",
     ),
     "north_america": (
-        "new york", "nyc", "usa", "united states", "los angeles", "san francisco",
-        "chicago", "miami", "las vegas", "seattle", "boston",
-        "canada", "toronto", "vancouver", "montreal",
-        "mexico", "mexico city", "cancun",
+        "new york",
+        "nyc",
+        "usa",
+        "united states",
+        "los angeles",
+        "san francisco",
+        "chicago",
+        "miami",
+        "las vegas",
+        "seattle",
+        "boston",
+        "canada",
+        "toronto",
+        "vancouver",
+        "montreal",
+        "mexico",
+        "mexico city",
+        "cancun",
     ),
     "oceania": (
-        "sydney", "australia", "melbourne", "new zealand", "auckland", "queenstown",
+        "sydney",
+        "australia",
+        "melbourne",
+        "new zealand",
+        "auckland",
+        "queenstown",
     ),
 }
 
@@ -201,34 +273,31 @@ _FESTIVALS: dict[str, list[_Festival]] = {
 # Per-vibe RAW weights (not normalised). Aggregation = average across vibes.
 _VIBE_WEIGHTS_RAW: dict[str, dict[str, float]] = {
     # adventure-leaning vibes — Shorts capture authentic raw content
-    "adventure":          {"youtube": 1.5, "reddit": 1.2, "blog": 0.7},
+    "adventure": {"youtube": 1.5, "reddit": 1.2, "blog": 0.7},
     "off the beaten path": {"youtube": 1.4, "reddit": 1.5, "blog": 0.5},
-    "hidden gems":        {"youtube": 1.4, "reddit": 1.5, "blog": 0.5},
-    "nightlife":          {"youtube": 1.5, "reddit": 1.3, "blog": 0.6},
-    "nature":             {"youtube": 1.3, "reddit": 1.0, "blog": 1.0},
-    "beaches":            {"youtube": 1.3, "reddit": 1.0, "blog": 1.0},
-    "beach":              {"youtube": 1.3, "reddit": 1.0, "blog": 1.0},
-
+    "hidden gems": {"youtube": 1.4, "reddit": 1.5, "blog": 0.5},
+    "nightlife": {"youtube": 1.5, "reddit": 1.3, "blog": 0.6},
+    "nature": {"youtube": 1.3, "reddit": 1.0, "blog": 1.0},
+    "beaches": {"youtube": 1.3, "reddit": 1.0, "blog": 1.0},
+    "beach": {"youtube": 1.3, "reddit": 1.0, "blog": 1.0},
     # blog-leaning vibes — curated, written guides best
-    "luxury":             {"youtube": 0.6, "reddit": 0.7, "blog": 1.5},
-    "iconic":             {"youtube": 0.7, "reddit": 0.7, "blog": 1.4},
-    "first time":         {"youtube": 0.8, "reddit": 0.9, "blog": 1.3},
-    "culture":            {"youtube": 0.8, "reddit": 1.0, "blog": 1.3},
-    "history":            {"youtube": 0.8, "reddit": 0.9, "blog": 1.3},
-    "spiritual":          {"youtube": 0.9, "reddit": 1.0, "blog": 1.3},
-    "relaxation":         {"youtube": 1.0, "reddit": 0.8, "blog": 1.2},
-
+    "luxury": {"youtube": 0.6, "reddit": 0.7, "blog": 1.5},
+    "iconic": {"youtube": 0.7, "reddit": 0.7, "blog": 1.4},
+    "first time": {"youtube": 0.8, "reddit": 0.9, "blog": 1.3},
+    "culture": {"youtube": 0.8, "reddit": 1.0, "blog": 1.3},
+    "history": {"youtube": 0.8, "reddit": 0.9, "blog": 1.3},
+    "spiritual": {"youtube": 0.9, "reddit": 1.0, "blog": 1.3},
+    "relaxation": {"youtube": 1.0, "reddit": 0.8, "blog": 1.2},
     # reddit-leaning vibes — communities best for tips and warnings
-    "budget":             {"youtube": 1.0, "reddit": 1.5, "blog": 0.8},
-    "backpacking":        {"youtube": 1.1, "reddit": 1.5, "blog": 0.7},
-    "solo":               {"youtube": 1.0, "reddit": 1.5, "blog": 0.8},
-
+    "budget": {"youtube": 1.0, "reddit": 1.5, "blog": 0.8},
+    "backpacking": {"youtube": 1.1, "reddit": 1.5, "blog": 0.7},
+    "solo": {"youtube": 1.0, "reddit": 1.5, "blog": 0.8},
     # balanced vibes
-    "foodie":             {"youtube": 1.3, "reddit": 1.3, "blog": 1.0},
-    "street food":        {"youtube": 1.3, "reddit": 1.4, "blog": 0.9},
-    "shopping":           {"youtube": 1.0, "reddit": 1.0, "blog": 1.2},
-    "family":             {"youtube": 1.0, "reddit": 1.1, "blog": 1.2},
-    "romantic":           {"youtube": 0.9, "reddit": 0.8, "blog": 1.3},
+    "foodie": {"youtube": 1.3, "reddit": 1.3, "blog": 1.0},
+    "street food": {"youtube": 1.3, "reddit": 1.4, "blog": 0.9},
+    "shopping": {"youtube": 1.0, "reddit": 1.0, "blog": 1.2},
+    "family": {"youtube": 1.0, "reddit": 1.1, "blog": 1.2},
+    "romantic": {"youtube": 0.9, "reddit": 0.8, "blog": 1.3},
 }
 
 
@@ -322,7 +391,11 @@ def _infer_season(
     # India (plains): Jun-Sep monsoon, Oct-Feb peak/winter, Mar-May summer-shoulder.
     if region == "india":
         if month in (6, 7, 8, 9):
-            return "monsoon", "monsoon-flooding-risk", ["monsoon", "indoor activities", "waterfalls"]
+            return (
+                "monsoon",
+                "monsoon-flooding-risk",
+                ["monsoon", "indoor activities", "waterfalls"],
+            )
         if any(k in destination_lower for k in _WINTER_PEAK_KEYWORDS) and month in (11, 12, 1, 2):
             return "peak", None, ["peak season", "best weather"]
         if month in (10, 11, 12, 1, 2):
@@ -463,7 +536,9 @@ def _crowd_level(season: str, festivals: list[tuple[str, str]]) -> str:
     return "moderate"
 
 
-def _build_warnings(season: str, region: str, destination_lower: str, weather_hint: str | None) -> list[str]:
+def _build_warnings(
+    season: str, region: str, destination_lower: str, weather_hint: str | None
+) -> list[str]:
     warnings: list[str] = []
     if season == "monsoon" and region in ("india", "southeast_asia"):
         warnings.append(
@@ -473,7 +548,9 @@ def _build_warnings(season: str, region: str, destination_lower: str, weather_hi
     if weather_hint == "snow-pass-closures":
         warnings.append("Heavy snow possible — high passes (e.g. Rohtang) may be closed.")
     if weather_hint == "heatwave-risk":
-        warnings.append("Hot summer in the plains — plan outdoor activity for early morning or evening.")
+        warnings.append(
+            "Hot summer in the plains — plan outdoor activity for early morning or evening."
+        )
     if weather_hint == "monsoon-landslide-risk":
         warnings.append("Monsoon in hill region — landslides and road closures possible.")
     return warnings
@@ -494,9 +571,7 @@ def _build_seasonal_tips(
     is_hill = any(k in destination_lower for k in _HILL_STATION_KEYWORDS)
 
     if season in ("peak", "very_peak"):
-        tips.append(
-            "Peak season — book trains, hotels, and marquee experiences well ahead."
-        )
+        tips.append("Peak season — book trains, hotels, and marquee experiences well ahead.")
     if cold_now and (region == "india" or is_hill):
         tips.append(
             "Nights get cold this time of year — pack layers/thermals, "
@@ -519,22 +594,46 @@ def _build_seasonal_tips(
 # Americas, Oceania) need country-level overrides; India is unambiguous by
 # region. Anything not matched returns None and the synthesizer infers it.
 _CURRENCY_OVERRIDES: dict[str, str] = {
-    "thailand": "THB (฿)", "bangkok": "THB (฿)", "phuket": "THB (฿)",
-    "japan": "JPY (¥)", "tokyo": "JPY (¥)",
-    "vietnam": "VND (₫)", "hanoi": "VND (₫)", "ho chi minh": "VND (₫)",
+    "thailand": "THB (฿)",
+    "bangkok": "THB (฿)",
+    "phuket": "THB (฿)",
+    "japan": "JPY (¥)",
+    "tokyo": "JPY (¥)",
+    "vietnam": "VND (₫)",
+    "hanoi": "VND (₫)",
+    "ho chi minh": "VND (₫)",
     "singapore": "SGD (S$)",
-    "indonesia": "IDR (Rp)", "bali": "IDR (Rp)",
-    "malaysia": "MYR (RM)", "kuala lumpur": "MYR (RM)",
-    "philippines": "PHP (₱)", "manila": "PHP (₱)",
+    "indonesia": "IDR (Rp)",
+    "bali": "IDR (Rp)",
+    "malaysia": "MYR (RM)",
+    "kuala lumpur": "MYR (RM)",
+    "philippines": "PHP (₱)",
+    "manila": "PHP (₱)",
     "sri lanka": "LKR (Rs)",
-    "uk": "GBP (£)", "london": "GBP (£)", "england": "GBP (£)", "scotland": "GBP (£)",
-    "switzerland": "CHF", "zurich": "CHF", "geneva": "CHF",
-    "usa": "USD ($)", "united states": "USD ($)", "new york": "USD ($)",
-    "nyc": "USD ($)", "los angeles": "USD ($)", "san francisco": "USD ($)",
-    "canada": "CAD (C$)", "toronto": "CAD (C$)", "vancouver": "CAD (C$)",
-    "mexico": "MXN ($)", "cancun": "MXN ($)",
-    "australia": "AUD (A$)", "sydney": "AUD (A$)", "melbourne": "AUD (A$)",
-    "new zealand": "NZD (NZ$)", "auckland": "NZD (NZ$)", "queenstown": "NZD (NZ$)",
+    "uk": "GBP (£)",
+    "london": "GBP (£)",
+    "england": "GBP (£)",
+    "scotland": "GBP (£)",
+    "switzerland": "CHF",
+    "zurich": "CHF",
+    "geneva": "CHF",
+    "usa": "USD ($)",
+    "united states": "USD ($)",
+    "new york": "USD ($)",
+    "nyc": "USD ($)",
+    "los angeles": "USD ($)",
+    "san francisco": "USD ($)",
+    "canada": "CAD (C$)",
+    "toronto": "CAD (C$)",
+    "vancouver": "CAD (C$)",
+    "mexico": "MXN ($)",
+    "cancun": "MXN ($)",
+    "australia": "AUD (A$)",
+    "sydney": "AUD (A$)",
+    "melbourne": "AUD (A$)",
+    "new zealand": "NZD (NZ$)",
+    "auckland": "NZD (NZ$)",
+    "queenstown": "NZD (NZ$)",
 }
 
 
@@ -691,9 +790,7 @@ _ANCHOR_GEO_EXCLUSIONS: dict[str, list[str]] = {
 
 # Regions the keyword map already understands. The LLM is asked to map to one
 # of these when possible so the existing _infer_season rules apply directly.
-_KNOWN_REGIONS = frozenset(
-    {"india", "southeast_asia", "europe", "north_america", "oceania"}
-)
+_KNOWN_REGIONS = frozenset({"india", "southeast_asia", "europe", "north_america", "oceania"})
 
 
 @dataclass(frozen=True)
@@ -783,19 +880,17 @@ async def _classify_destination_via_llm(
             structured = llm.with_structured_output(_Classification, method="json_mode")
         except Exception:  # noqa: BLE001
             structured = llm.with_structured_output(_Classification)
-        logger.info("[LLM] signals_classifier: classifying region/hemisphere for dest=%r", destination)
+        logger.info(
+            "[LLM] signals_classifier: classifying region/hemisphere for dest=%r", destination
+        )
         result = await structured.ainvoke(
             [SystemMessage(content=system), HumanMessage(content=user)]
         )
         if not isinstance(result, _Classification):
             result = _Classification.model_validate(result)
-        return _DestinationClassification(
-            region=result.region, hemisphere=result.hemisphere
-        )
+        return _DestinationClassification(region=result.region, hemisphere=result.hemisphere)
     except Exception as e:  # noqa: BLE001
-        logger.warning(
-            "signals.llm_classifier_failed dest=%r err=%s", destination, e
-        )
+        logger.warning("signals.llm_classifier_failed dest=%r err=%s", destination, e)
         return None
 
 
@@ -861,7 +956,8 @@ async def enrich_anchor_hints(signals: TravelSignals, destination: str) -> None:
             if dropped:
                 logger.info(
                     "signals.anchor_hints.geo_filter dest=%r dropped=%d",
-                    destination, dropped,
+                    destination,
+                    dropped,
                 )
 
         if anchors:
@@ -872,9 +968,7 @@ async def enrich_anchor_hints(signals: TravelSignals, destination: str) -> None:
         logger.exception("signals.anchor_hints.failed dest=%r", destination)
 
 
-async def enrich_signals_with_llm(
-    signals: TravelSignals, trip_params: TripParams
-) -> TravelSignals:
+async def enrich_signals_with_llm(signals: TravelSignals, trip_params: TripParams) -> TravelSignals:
     """If `signals.region` is "unknown", call the LLM classifier to fill in
     region + season + warnings + query_modifiers correctly.
 
@@ -901,9 +995,7 @@ async def enrich_signals_with_llm(
         month, classification.region, dest_key, classification.hemisphere
     )
 
-    festivals = _find_active_festivals(
-        dest_key, trip_params.date_from, trip_params.date_to
-    )
+    festivals = _find_active_festivals(dest_key, trip_params.date_from, trip_params.date_to)
     crowd_level = _crowd_level(season, festivals)
     query_modifiers = _build_query_modifiers(
         season_modifiers, season, crowd_level, festivals, trip_params.vibes

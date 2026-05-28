@@ -140,8 +140,9 @@ def test_filter_quality_drops_listicle_and_blacklisted() -> None:
     videos = [
         _video("v1", "AuthenticCreator", view_count=50_000),  # keep
         _video("v2", "TripAdvisor", view_count=500_000),  # drop (blacklist)
-        _video("v3", "OtherCreator", view_count=20_000,
-               title="Top 10 Goa Beaches"),  # drop (listicle)
+        _video(
+            "v3", "OtherCreator", view_count=20_000, title="Top 10 Goa Beaches"
+        ),  # drop (listicle)
         _video("v4", "ThirdCreator", view_count=200),  # drop (low views)
     ]
     survivors = _filter_quality(videos)
@@ -185,9 +186,7 @@ async def test_enrich_with_transcripts_drops_videos_without_captions() -> None:
     def fake_fetch(video_id: str, max_chars: int = 800) -> str | None:
         return "real transcript text" if video_id in {"v1", "v3"} else None
 
-    with patch(
-        "app.agents.youtube_longform.fetch_transcript_safe", side_effect=fake_fetch
-    ):
+    with patch("app.agents.youtube_longform.fetch_transcript_safe", side_effect=fake_fetch):
         survivors = await _enrich_with_transcripts(videos)
 
     survivor_ids = {v.video_id for v in survivors}
@@ -208,16 +207,20 @@ async def test_run_returns_empty_when_no_videos_have_transcripts() -> None:
     signals = extract_signals(trip)
     videos = [_video(f"v{i}", f"c{i}", 10_000) for i in range(3)]
 
-    with patch(
-        "app.agents.youtube_longform._search_fanout",
-        AsyncMock(return_value=videos),
-    ), patch(
-        "app.agents.youtube_longform.fetch_transcript_safe",
-        return_value=None,  # nobody has captions
-    ), patch(
-        "app.agents.youtube_longform._extract_via_llm",
-        AsyncMock(return_value=[]),
-    ) as llm_mock:
+    with (
+        patch(
+            "app.agents.youtube_longform._search_fanout",
+            AsyncMock(return_value=videos),
+        ),
+        patch(
+            "app.agents.youtube_longform.fetch_transcript_safe",
+            return_value=None,  # nobody has captions
+        ),
+        patch(
+            "app.agents.youtube_longform._extract_via_llm",
+            AsyncMock(return_value=[]),
+        ) as llm_mock,
+    ):
         out = await run_youtube_longform_agent(trip, signals)
 
     assert out == []
@@ -251,4 +254,5 @@ async def test_run_catches_runtime_error_for_missing_api_key() -> None:
 # Smoke check: the listicle regex compiles and is a re.Pattern.
 def test_listicle_regex_is_compiled() -> None:
     import re
+
     assert isinstance(LONGFORM_LISTICLE_TITLE_RE, re.Pattern)

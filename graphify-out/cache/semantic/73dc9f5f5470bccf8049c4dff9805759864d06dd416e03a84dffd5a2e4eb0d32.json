@@ -1,0 +1,1 @@
+{"nodes": [{"id": "agents_base_safe_json_loads", "label": "safe_json_loads", "file_type": "code", "source_file": "app/agents/base.py", "source_location": "line 13", "source_url": null, "captured_at": null, "author": null, "contributor": null}], "edges": [], "hyperedges": []}

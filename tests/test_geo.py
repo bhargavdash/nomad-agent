@@ -9,7 +9,7 @@ import pytest
 
 from app.geo import GeoBrief, GeoLeg, build_geo_brief
 from app.geo.distance import drive_time_hint, haversine_km, road_km
-from app.geo.planner import _nearest_neighbour_order, _tz_offset_hours
+from app.geo.planner import _nearest_neighbour_order, _offset_hours, _tz_name
 from app.geo.sun import sun_times
 from app.schemas import TripParams
 from app.signals import extract_signals
@@ -23,10 +23,18 @@ UDAIPUR = (24.5854, 73.7125)
 
 def _trip(**ov) -> TripParams:
     base = dict(
-        trip_id="t1", user_id="u1", destination="Rajasthan, India",
-        date_from="2026-12-20", date_to="2026-12-31", duration_days=11,
-        travelers="2", vibes=["heritage"], accommodation="Heritage Haveli",
-        pace="Balanced", budget="Medium", preferences=None,
+        trip_id="t1",
+        user_id="u1",
+        destination="Rajasthan, India",
+        date_from="2026-12-20",
+        date_to="2026-12-31",
+        duration_days=11,
+        travelers="2",
+        vibes=["heritage"],
+        accommodation="Heritage Haveli",
+        pace="Balanced",
+        budget="Medium",
+        preferences=None,
     )
     base.update(ov)
     return TripParams(**base)
@@ -56,8 +64,8 @@ def test_sun_times_jaipur_december_matches_reality() -> None:
     sr, ss = sun_times(date(2026, 12, 25), *JAIPUR, 5.5)
     sr_h, sr_m = map(int, sr.split(":"))
     ss_h, ss_m = map(int, ss.split(":"))
-    assert sr_h == 7 and 5 <= sr_m <= 25      # ~7:1x
-    assert ss_h == 17 and 30 <= ss_m <= 55    # ~17:4x
+    assert sr_h == 7 and 5 <= sr_m <= 25  # ~7:1x
+    assert ss_h == 17 and 30 <= ss_m <= 55  # ~17:4x
 
 
 def test_sun_times_polar_returns_none() -> None:
@@ -68,17 +76,35 @@ def test_sun_times_polar_returns_none() -> None:
 # --- tz + ordering ----------------------------------------------------------
 
 
-def test_tz_offset_hours() -> None:
-    assert _tz_offset_hours("india", "rajasthan, india") == 5.5
-    assert _tz_offset_hours("europe", "paris, france") == 1.0
-    assert _tz_offset_hours("southeast_asia", "bangkok, thailand") == 7.0
-    assert _tz_offset_hours("unknown", "atlantis") is None  # skip sun times
+def test_tz_name_mapping() -> None:
+    assert _tz_name("india", "rajasthan, india") == "Asia/Kolkata"
+    assert _tz_name("europe", "paris, france") == "Europe/Paris"
+    assert _tz_name("southeast_asia", "bangkok, thailand") == "Asia/Bangkok"
+    assert _tz_name("unknown", "atlantis") is None  # → sun times skipped
+
+
+def test_offset_hours_is_dst_aware() -> None:
+    # Paris: CET (+1) in winter, CEST (+2) in summer — the DST fix.
+    assert _offset_hours("Europe/Paris", date(2026, 1, 15)) == 1.0
+    assert _offset_hours("Europe/Paris", date(2026, 6, 15)) == 2.0
+    # India: always +5:30, no DST.
+    assert _offset_hours("Asia/Kolkata", date(2026, 6, 15)) == 5.5
+
+
+def test_sun_times_paris_june_dst_correct() -> None:
+    # Paris ~48.85N on Jun 15 sunrise ≈ 05:47 CEST (was ~04:48 with the old
+    # fixed +1 offset). Verifies the DST fix end-to-end via the +2 offset.
+    sr, _ss = sun_times(date(2026, 6, 15), 48.8566, 2.3522, 2.0)
+    h, m = map(int, sr.split(":"))
+    assert h == 5 and 35 <= m <= 59
 
 
 def test_nearest_neighbour_fixes_backtracking_order() -> None:
     coords = {
-        "Jaipur": JAIPUR, "Jodhpur": JODHPUR,
-        "Jaisalmer": JAISALMER, "Udaipur": UDAIPUR,
+        "Jaipur": JAIPUR,
+        "Jodhpur": JODHPUR,
+        "Jaisalmer": JAISALMER,
+        "Udaipur": UDAIPUR,
     }
     # A deliberately bad order that bounces east-west: Jaisalmer (far W) then
     # back to Jaipur (far E) then Udaipur (S). NN from the start should reorder.

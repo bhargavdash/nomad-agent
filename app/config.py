@@ -81,9 +81,11 @@ class Settings(BaseSettings):
     TOGETHER_API_KEY: str = ""
     CEREBRAS_API_KEY: str = ""
 
-    # Optional: observability
+    # Optional: observability. Set LANGSMITH_TRACING=true + LANGSMITH_API_KEY to
+    # get full per-call traces (incl. token counts + latency) in LangSmith.
     LANGSMITH_API_KEY: str = ""
     LANGSMITH_TRACING: str = ""
+    LANGSMITH_PROJECT: str = "nomad-agent"
 
 
 settings = Settings()

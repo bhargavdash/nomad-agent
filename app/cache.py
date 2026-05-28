@@ -92,18 +92,14 @@ async def get_cached_research(destination: str) -> list[ResearchDiscovery] | Non
             return None
         data = json.loads(raw)
         pool = [ResearchDiscovery.model_validate(d) for d in data]
-        logger.info(
-            "cache.research HIT dest=%r n=%d", destination, len(pool)
-        )
+        logger.info("cache.research HIT dest=%r n=%d", destination, len(pool))
         return pool
     except Exception as e:  # noqa: BLE001
         logger.warning("cache.research get failed dest=%r: %s", destination, e)
         return None
 
 
-async def set_cached_research(
-    destination: str, discoveries: list[ResearchDiscovery]
-) -> None:
+async def set_cached_research(destination: str, discoveries: list[ResearchDiscovery]) -> None:
     """Cache a destination's discovery pool (best-effort, no-op on error)."""
     client = _get_client()
     if client is None or not discoveries:
@@ -114,7 +110,9 @@ async def set_cached_research(
         await client.set(_research_key(destination), payload, ex=ttl)
         logger.info(
             "cache.research SET dest=%r n=%d ttl_days=%d",
-            destination, len(discoveries), settings.RESEARCH_CACHE_TTL_DAYS,
+            destination,
+            len(discoveries),
+            settings.RESEARCH_CACHE_TTL_DAYS,
         )
     except Exception as e:  # noqa: BLE001
         logger.warning("cache.research set failed dest=%r: %s", destination, e)
@@ -145,8 +143,6 @@ async def set_cached_geocode(query: str, latlng: tuple[float, float]) -> None:
     if client is None:
         return
     try:
-        await client.set(
-            _geo_key(query), f"{latlng[0]},{latlng[1]}", ex=_GEOCODE_TTL_SECONDS
-        )
+        await client.set(_geo_key(query), f"{latlng[0]},{latlng[1]}", ex=_GEOCODE_TTL_SECONDS)
     except Exception as e:  # noqa: BLE001
         logger.warning("cache.geo set failed query=%r: %s", query, e)
