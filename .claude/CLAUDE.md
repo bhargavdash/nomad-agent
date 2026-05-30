@@ -104,12 +104,38 @@ nomad-agent/
 | [rules/agent-architecture.md](rules/agent-architecture.md) | `app/agents/**`, `app/graph/**`, `app/signals.py`, `app/llm/**` | Pipeline contract, LLM factory rules, signal extraction |
 | [rules/db-contract.md](rules/db-contract.md) | `app/db/**`, `app/schemas.py`, `app/routes/**` | Column names, Node↔Python wire format, internal auth |
 
+## Auto-select rules — no prompt needed
+
+These fire automatically from hooks or from explicit recognition. Claude must act on them without being asked:
+
+| Trigger | Auto action |
+|---------|-------------|
+| Any codebase question + `graphify-out/graph.json` exists | Run `graphify query "<question>"` before grepping — never grep raw files first |
+| Question about LangGraph, FastAPI, Pydantic v2, supabase-py, httpx | Use **context7 MCP** (`resolve_library_id` + `get_library_docs`) for up-to-date docs |
+| Edited `app/schemas.py` or `app/db/supabase_writer.py` | Invoke **schema-sync-checker** subagent before task is done |
+| Edited `app/agents/**`, `app/graph/**`, or `app/db/**` | Invoke **pipeline-reviewer** subagent before task is done |
+| Edited `app/agents/synthesizer.py` or `app/signals.py` | Run `uv run pytest tests/test_eval.py -v`; score must be >= 85 |
+| User says "add a new source / agent / API" | Load **add-research-agent** skill |
+| User says "swap / change the LLM / model / provider" | Load **swap-llm-provider** skill |
+| User says "add a tool / wrapper / API client" | Load **add-tool** skill |
+| User says "eval / quality / score / regression" | Load **run-eval** skill |
+| End of any response where files were edited | `graphify update .` runs automatically via Stop hook |
+
+## Agents
+
+| Agent | Auto-trigger (hook) | Manual invocation |
+|-------|--------------------|--------------------|
+| [pipeline-reviewer](agents/pipeline-reviewer.md) | Edit in `app/agents/`, `app/graph/`, `app/db/` | After adding or modifying any pipeline component |
+| [schema-sync-checker](agents/schema-sync-checker.md) | Edit to `schemas.py` or `supabase_writer.py` | Before any PR touching the schema |
+
 ## Skills
 
-| File | When to use |
-|------|------|
-| [skills/add-research-agent.md](skills/add-research-agent.md) | Adding a 4th+ research agent (e.g. Instagram, TikTok, Substack) |
-| [skills/swap-llm-provider.md](skills/swap-llm-provider.md) | Swapping a role's model or adding a new provider to the factory |
+| File | Trigger phrase | What it does |
+|------|----------------|--------------|
+| [skills/add-research-agent.md](skills/add-research-agent.md) | "add a new source/agent" | Full 9-step checklist for a 4th+ research agent |
+| [skills/swap-llm-provider.md](skills/swap-llm-provider.md) | "swap/change model or provider" | One-line env swap or full provider addition guide |
+| [skills/add-tool.md](skills/add-tool.md) | "add a tool/wrapper/API client" | Scaffold new external API tool following httpx/async pattern |
+| [skills/run-eval.md](skills/run-eval.md) | "eval/quality/score/regression" | Run itinerary eval harness, interpret score >= 85 threshold |
 
 ## Scripts
 
@@ -121,6 +147,7 @@ nomad-agent/
 | `uv run python scripts/run_youtube_agent_locally.py` | Run only the YouTube agent (fast iteration) |
 | `uv run pytest` | Full test suite |
 | `uv run pytest tests/test_schemas.py tests/test_signals.py` | Pure-Python tests only (no API keys needed) |
+| `uv run pytest tests/test_eval.py -v` | Eval harness — score must be >= 85 after synthesizer/signals changes |
 | `uv run ruff check .` | Lint |
 | `uv run mypy app` | Type-check |
 
@@ -145,4 +172,4 @@ This project has a knowledge graph at `graphify-out/` with god nodes, community 
 - For codebase questions, first run `graphify query "<question>"` when `graphify-out/graph.json` exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than `GRAPH_REPORT.md` or raw grep output.
 - If `graphify-out/wiki/index.md` exists, use it for broad navigation instead of raw source browsing.
 - Read `graphify-out/GRAPH_REPORT.md` only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost). This also runs automatically via the Stop hook.
