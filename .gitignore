@@ -29,6 +29,9 @@ uv.lock.bak
 .vscode/
 .idea/
 
+# graphify — generated knowledge graph artifacts (local tooling only)
+graphify-out/
+
 # OS
 .DS_Store
 Thumbs.db
