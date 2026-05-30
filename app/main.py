@@ -17,6 +17,7 @@ logging.basicConfig(
 # transitive module-level logger setup runs. (E402 is intentional here.)
 from app.observability import configure_observability  # noqa: E402
 from app.routes.research import router as research_router  # noqa: E402
+from app.routes.trending import router as trending_router  # noqa: E402
 
 # Enable LangSmith tracing if configured (bridges .env → os.environ).
 configure_observability()
@@ -37,6 +38,7 @@ app.add_middleware(
 )
 
 app.include_router(research_router)
+app.include_router(trending_router)
 
 
 @app.get("/agent/health")

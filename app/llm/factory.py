@@ -36,6 +36,10 @@ def _resolve_role(role: str) -> tuple[str, str]:
             settings.LLM_GEO_PLANNER_PROVIDER,
             settings.LLM_GEO_PLANNER_MODEL,
         ),
+        "trending": (
+            settings.LLM_TRENDING_PROVIDER,
+            settings.LLM_TRENDING_MODEL,
+        ),
     }
     if role not in mapping:
         raise ValueError(f"Unknown LLM role: {role!r}. Expected one of {list(mapping)}.")

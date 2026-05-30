@@ -72,6 +72,12 @@ class Settings(BaseSettings):
     # (which would silently degrade the geo layer).
     LLM_GEO_PLANNER_PROVIDER: str = "cerebras"
     LLM_GEO_PLANNER_MODEL: str = "qwen-3-235b-a22b-instruct-2507"
+    # SA-8 trending agent — single seasonal call producing 10 India + 10
+    # international destinations with blurbs. Defaults to Cerebras Qwen
+    # because the call is small, the output is structured JSON, and the
+    # cadence is ~4 calls/year so cost is effectively zero.
+    LLM_TRENDING_PROVIDER: str = "cerebras"
+    LLM_TRENDING_MODEL: str = "qwen-3-235b-a22b-instruct-2507"
 
     # --- Provider API keys (optional — only checked when used) ---
     GROQ_API_KEY: str = ""

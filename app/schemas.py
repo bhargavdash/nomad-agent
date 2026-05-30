@@ -74,3 +74,29 @@ class AIItinerary(BaseModel):
     budget_estimate: str | None = None  # rough cost blurb
     discoveries: list[ResearchDiscovery] = Field(..., min_length=3, max_length=12)
     days: list[AIDay] = Field(..., min_length=1)
+
+
+# ---------------------------------------------------------------------------
+# SA-8 — Trending destinations (single LLM call, season-cached)
+# ---------------------------------------------------------------------------
+
+
+class TrendingDest(BaseModel):
+    name: str = Field(..., min_length=1)
+    country: str = Field(..., min_length=1)
+    duration: str = Field(..., min_length=1)  # e.g. "5-7 days"
+    blurb: str = Field(..., min_length=1, max_length=140)
+    vibe_tags: list[str] = Field(..., min_length=1, max_length=3)
+
+
+class TrendingPayload(BaseModel):
+    """Season-keyed payload written to nomad-api's `trending_cache` table.
+
+    `india` and `international` must each contain exactly 10 destinations.
+    The Node API reads this JSON and ships it to the frontend untouched.
+    """
+
+    season: Literal["summer", "monsoon", "post-monsoon", "winter"]
+    year: int = Field(..., ge=2020, le=2100)
+    india: list[TrendingDest] = Field(..., min_length=10, max_length=10)
+    international: list[TrendingDest] = Field(..., min_length=10, max_length=10)

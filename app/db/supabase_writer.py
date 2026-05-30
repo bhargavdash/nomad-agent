@@ -13,7 +13,7 @@ from typing import Any
 from supabase import Client, create_client
 
 from app.config import settings
-from app.schemas import AIItinerary, ResearchDiscovery
+from app.schemas import AIItinerary, ResearchDiscovery, TrendingPayload
 
 _client: Client | None = None
 
@@ -172,5 +172,29 @@ async def write_discoveries(trip_id: str, discoveries: list[ResearchDiscovery]) 
         client.table("research_jobs").update({"discoveries": payload}).eq(
             "trip_id", trip_id
         ).execute()
+
+    await asyncio.to_thread(_write)
+
+
+async def write_trending(
+    season_key: str,
+    payload: TrendingPayload,
+) -> None:
+    """Upsert a trending_cache row keyed on season_key.
+
+    Body is `payload.model_dump()` so the JSON shape exactly matches the
+    Pydantic schema — that JSON is shipped verbatim by the Node API.
+    """
+
+    def _write() -> None:
+        client = _get_client()
+        row = {
+            "season_key": season_key,
+            "season": payload.season,
+            "year": payload.year,
+            "payload": payload.model_dump(mode="json"),
+            "refreshed_at": "now()",
+        }
+        client.table("trending_cache").upsert(row, on_conflict="season_key").execute()
 
     await asyncio.to_thread(_write)
