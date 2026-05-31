@@ -22,6 +22,7 @@ from app.agents.trending import (
 )
 from app.auth import verify_internal_secret
 from app.db import supabase_writer
+from app.images import resolve_and_store_trending_images
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -44,6 +45,10 @@ async def _run_refresh(season: Season, year: int, season_key: str) -> None:
             season_key,
         )
         payload = await generate_trending(season=season, year=year)
+        # Resolve + self-host a photo per destination before caching so the Node
+        # /trending endpoint serves stored URLs (no lazy on-read hydration ->
+        # no race). Best-effort: failures leave imageUrl None (FE fallback).
+        await resolve_and_store_trending_images(payload)
         await supabase_writer.write_trending(season_key, payload)
         logger.info("[trending] refresh done   key=%s", season_key)
     except Exception:  # noqa: BLE001

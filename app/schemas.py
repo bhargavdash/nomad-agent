@@ -87,6 +87,11 @@ class TrendingDest(BaseModel):
     duration: str = Field(..., min_length=1)  # e.g. "5-7 days"
     blurb: str = Field(..., min_length=1, max_length=140)
     vibe_tags: list[str] = Field(..., min_length=1, max_length=3)
+    # Resolved + self-hosted at trending-refresh time (see app/images.py), then
+    # served verbatim by nomad-api. camelCase matches nomad-api's TrendingDest
+    # type and the frontend's `dest.imageUrl`. None until resolved / no photo.
+    # The LLM isn't prompted for it; resolution overwrites it unconditionally.
+    imageUrl: str | None = None
 
 
 class TrendingPayload(BaseModel):

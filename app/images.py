@@ -21,7 +21,7 @@ import re
 import httpx
 
 from app.db import supabase_writer
-from app.schemas import AIItinerary
+from app.schemas import AIItinerary, TrendingPayload
 from app.tools.place_image import resolve_place_image_url
 
 logger = logging.getLogger(__name__)
@@ -104,3 +104,29 @@ async def resolve_and_store_itinerary_images(
         len(cities),
     )
     return hero_url, city_images
+
+
+async def resolve_and_store_trending_images(payload: TrendingPayload) -> None:
+    """Set a self-hosted ``imageUrl`` on every trending destination, in place.
+
+    Called at trending-refresh write time so the Node /trending endpoint serves
+    stored URLs directly — no lazy on-read hydration, hence no race. Always
+    overwrites imageUrl (with None when nothing resolves) so a stale or
+    LLM-hallucinated value can't leak through. Never raises.
+    """
+    dests = [*payload.india, *payload.international]
+
+    async with httpx.AsyncClient(timeout=_DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
+        urls = await asyncio.gather(
+            *(
+                _resolve_and_host(
+                    client, d.name, d.country, f"trending/{_slug(d.name)}-{_slug(d.country)}"
+                )
+                for d in dests
+            )
+        )
+
+    resolved = sum(1 for url in urls if url)
+    for dest, url in zip(dests, urls):
+        dest.imageUrl = url
+    logger.info("images.trending_resolved %d/%d", resolved, len(dests))
