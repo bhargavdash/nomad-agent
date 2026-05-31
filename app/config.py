@@ -55,12 +55,12 @@ class Settings(BaseSettings):
     LLM_REDDIT_MODEL: str = "llama-3.3-70b-versatile"
     LLM_GOOGLE_PROVIDER: str = "groq"
     LLM_GOOGLE_MODEL: str = "llama-3.3-70b-versatile"
-    # Synthesizer: quality-critical step. Default to Cerebras' 235B model
-    # (free 1M tokens/day, far stronger than 70B), with a Groq 70B fallback
-    # so a free-tier queue/error never turns into a hard failure. If the
+    # Synthesizer: quality-critical step. Default to Cerebras' GLM-4.7 model
+    # (free tier, far stronger than 70B), with a Groq 70B fallback so a
+    # free-tier queue/error never turns into a hard failure. If the
     # fallback provider/model equals the primary, no fallback is attached.
     LLM_SYNTH_PROVIDER: str = "cerebras"
-    LLM_SYNTH_MODEL: str = "qwen-3-235b-a22b-instruct-2507"
+    LLM_SYNTH_MODEL: str = "zai-glm-4.7"
     LLM_SYNTH_FALLBACK_PROVIDER: str = "groq"
     LLM_SYNTH_FALLBACK_MODEL: str = "llama-3.3-70b-versatile"
     # Cerebras' free tier can queue at peak hours and block a request. Bound the
@@ -79,13 +79,13 @@ class Settings(BaseSettings):
     # competing with the research agents for Groq's tight ~100k tokens/day cap
     # (which would silently degrade the geo layer).
     LLM_GEO_PLANNER_PROVIDER: str = "cerebras"
-    LLM_GEO_PLANNER_MODEL: str = "qwen-3-235b-a22b-instruct-2507"
+    LLM_GEO_PLANNER_MODEL: str = "zai-glm-4.7"
     # SA-8 trending agent — single seasonal call producing 10 India + 10
-    # international destinations with blurbs. Defaults to Cerebras Qwen
+    # international destinations with blurbs. Defaults to Cerebras GLM-4.7
     # because the call is small, the output is structured JSON, and the
     # cadence is ~4 calls/year so cost is effectively zero.
     LLM_TRENDING_PROVIDER: str = "cerebras"
-    LLM_TRENDING_MODEL: str = "qwen-3-235b-a22b-instruct-2507"
+    LLM_TRENDING_MODEL: str = "zai-glm-4.7"
 
     # --- Provider API keys (optional — only checked when used) ---
     GROQ_API_KEY: str = ""
