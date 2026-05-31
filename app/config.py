@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     YOUTUBE_API_KEY: str = ""  # required for YT agent
     TAVILY_API_KEY: str = ""  # required for Google blog agent
 
+    # --- Place imagery (hero + per-city photos, resolved at build time) ---
+    # Optional long-tail stock-photo search; empty → Wikipedia-only resolution.
+    PEXELS_API_KEY: str = ""
+    # Public Supabase Storage bucket the agent uploads self-hosted photos into.
+    # Must exist + be public for self-hosting; if upload fails the build phase
+    # falls back to writing the upstream URL (still works, just not self-hosted).
+    SUPABASE_IMAGE_BUCKET: str = "place-images"
+
     # --- Per-role LLM provider/model selection ---
     LLM_YOUTUBE_PROVIDER: str = "groq"
     LLM_YOUTUBE_MODEL: str = "llama-3.3-70b-versatile"
