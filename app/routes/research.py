@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from app.auth import verify_internal_secret
 from app.db import supabase_writer
 from app.graph.pipeline import run_pipeline
+from app.images import resolve_and_store_itinerary_images
 from app.schemas import TripParams
 
 logger = logging.getLogger(__name__)
@@ -143,7 +144,24 @@ async def _run_and_persist(trip_params: TripParams) -> None:
             itinerary.stats_tips,
             itinerary.stats_photo_stops,
         )
-        await supabase_writer.write_itinerary(trip_params.trip_id, itinerary)
+        # Resolve + self-host hero/per-city imagery (best-effort — never blocks
+        # completion). Runs in the "building" phase so it's covered by the FE's
+        # existing progress animation. The agent is the SOLE image writer; Node
+        # and web only read these URLs, so there is no read/write race.
+        hero_image_url: str | None = None
+        city_images: dict[str, str | None] = {}
+        try:
+            hero_image_url, city_images = await resolve_and_store_itinerary_images(
+                trip_params.trip_id, trip_params.destination, itinerary
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "image resolution failed for trip %s — continuing; FE shows fallbacks.",
+                trip_params.trip_id,
+                exc_info=True,
+            )
+
+        await supabase_writer.write_itinerary(trip_params.trip_id, itinerary, city_images)
         await supabase_writer.mark_trip_ready(
             trip_params.trip_id,
             stats={
@@ -151,6 +169,7 @@ async def _run_and_persist(trip_params: TripParams) -> None:
                 "stats_tips": itinerary.stats_tips,
                 "stats_photo_stops": itinerary.stats_photo_stops,
             },
+            hero_image_url=hero_image_url,
         )
 
         # Trip-level planning surface (Tier 2). Isolated + best-effort: if the

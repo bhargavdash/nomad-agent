@@ -8,12 +8,17 @@ client is sync; we use asyncio.to_thread for non-blocking calls).
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+import logging
+from datetime import datetime, timezone
+from typing import Any, cast
 
+from storage3.types import FileOptions
 from supabase import Client, create_client
 
 from app.config import settings
 from app.schemas import AIItinerary, ResearchDiscovery, TrendingPayload
+
+logger = logging.getLogger(__name__)
 
 _client: Client | None = None
 
@@ -29,6 +34,36 @@ def _get_client() -> Client:
     return _client
 
 
+async def upload_public_image(data: bytes, content_type: str, path: str) -> str | None:
+    """Upload image bytes to the public Storage bucket and return the public URL.
+
+    Best-effort: returns None when Supabase/storage isn't configured or the
+    upload fails, so the caller can fall back to the upstream URL. `upsert` is
+    set so re-running a trip's build overwrites the deterministic object path
+    rather than 409-ing.
+    """
+    if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
+        return None
+
+    bucket = settings.SUPABASE_IMAGE_BUCKET
+    file_options: FileOptions = {
+        "content-type": content_type,
+        "cache-control": "31536000",
+        "upsert": "true",
+    }
+
+    def _upload() -> str | None:
+        try:
+            store = _get_client().storage.from_(bucket)
+            store.upload(path, data, file_options)
+            return store.get_public_url(path)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("supabase.image_upload_failed path=%r err=%s", path, e)
+            return None
+
+    return await asyncio.to_thread(_upload)
+
+
 async def update_research_job(trip_id: str, **fields: Any) -> None:
     """Patch a research_jobs row identified by trip_id."""
     if not fields:
@@ -41,12 +76,20 @@ async def update_research_job(trip_id: str, **fields: Any) -> None:
     await asyncio.to_thread(_update)
 
 
-async def write_itinerary(trip_id: str, itinerary: AIItinerary) -> None:
+async def write_itinerary(
+    trip_id: str,
+    itinerary: AIItinerary,
+    city_images: dict[str, str | None] | None = None,
+) -> None:
     """Write itinerary_days and stops for a trip.
 
     Inserts one row per day, then per stop. Day rows are inserted first so
-    the returned ids can be used as foreign keys on the stops.
+    the returned ids can be used as foreign keys on the stops. `city_images`
+    maps a city name -> resolved (self-hosted) image URL; a day's `image_url`
+    is set from it, or None when the city had no usable photo (the frontend
+    then shows its deterministic themed fallback).
     """
+    images = city_images or {}
 
     def _write() -> None:
         client = _get_client()
@@ -62,11 +105,12 @@ async def write_itinerary(trip_id: str, itinerary: AIItinerary) -> None:
                 "description": d.description,
                 "highlights": d.highlights,
                 "stop_count": len(d.stops),
+                "image_url": images.get(d.city),
             }
             for d in itinerary.days
         ]
         days_resp = client.table("itinerary_days").insert(day_rows).execute()
-        inserted_days = days_resp.data or []
+        inserted_days = cast("list[dict[str, Any]]", days_resp.data or [])
         # Map day_number -> id for foreign-key linking.
         day_id_by_number: dict[int, Any] = {
             row["day_number"]: row["id"] for row in inserted_days if "id" in row
@@ -97,20 +141,64 @@ async def write_itinerary(trip_id: str, itinerary: AIItinerary) -> None:
     await asyncio.to_thread(_write)
 
 
-async def mark_trip_ready(trip_id: str, stats: dict[str, int]) -> None:
-    """Mark a trip as ready and store summary stats."""
+async def mark_trip_ready(
+    trip_id: str, stats: dict[str, int], hero_image_url: str | None = None
+) -> None:
+    """Mark a trip as ready, store summary stats, and record the destination
+    hero image. `images_resolved_at` is stamped so the serving side knows
+    imagery was resolved at build time — Node never re-resolves (single-writer
+    image contract; see db-contract.md)."""
 
     def _mark() -> None:
         client = _get_client()
-        payload = {
+        payload: dict[str, Any] = {
             "status": "ready",
             "stats_places": stats.get("stats_places", 0),
             "stats_tips": stats.get("stats_tips", 0),
             "stats_photo_stops": stats.get("stats_photo_stops", 0),
+            "images_resolved_at": datetime.now(timezone.utc).isoformat(),
         }
+        if hero_image_url is not None:
+            payload["hero_image_url"] = hero_image_url
         client.table("trips").update(payload).eq("id", trip_id).execute()
 
     await asyncio.to_thread(_mark)
+
+
+async def backfill_trip_images(
+    trip_id: str,
+    hero_image_url: str | None,
+    city_images: dict[str, str | None],
+) -> None:
+    """Heal a pre-existing trip's imagery WITHOUT touching status or stats.
+
+    Targeted UPDATE used by the offline backfill (scripts/backfill_images.py):
+    sets trips.hero_image_url (only when resolved) and stamps
+    images_resolved_at so the trip is never re-backfilled, then sets
+    itinerary_days.image_url per city — only when resolved, so an existing
+    value is never clobbered with None. Mirrors the columns the build-time
+    writers own (mark_trip_ready + write_itinerary) but leaves the trip's
+    status/stats/days/stops intact. Off the read path by design — see
+    nomad-web/IMAGE_PIPELINE.md §7.
+    """
+
+    def _write() -> None:
+        client = _get_client()
+        trip_payload: dict[str, Any] = {
+            "images_resolved_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if hero_image_url is not None:
+            trip_payload["hero_image_url"] = hero_image_url
+        client.table("trips").update(trip_payload).eq("id", trip_id).execute()
+
+        for city, url in city_images.items():
+            if not city or url is None:
+                continue
+            client.table("itinerary_days").update({"image_url": url}).eq(
+                "trip_id", trip_id
+            ).eq("city", city).execute()
+
+    await asyncio.to_thread(_write)
 
 
 async def update_trip_overview(trip_id: str, itinerary: AIItinerary) -> None:
@@ -195,6 +283,6 @@ async def write_trending(
             "payload": payload.model_dump(mode="json"),
             "refreshed_at": "now()",
         }
-        client.table("trending_cache").upsert(row, on_conflict="season_key").execute()
+        client.table("trending_cache").upsert(cast("Any", row), on_conflict="season_key").execute()
 
     await asyncio.to_thread(_write)
