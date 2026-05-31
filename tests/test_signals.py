@@ -273,7 +273,51 @@ def test_signals_differ_by_dates_same_destination() -> None:
 
 def test_vibe_weights_sum_to_one() -> None:
     """Weights are normalised proportions — synthesizer relies on this."""
-    for vibes in [["luxury"], ["adventure", "nature"], ["foodie", "culture", "budget"], []]:
+    for vibes in [
+        ["luxury"],
+        ["adventure", "nature"],
+        ["foodie", "culture", "budget"],
+        ["luxury dining", "aesthetic cafes"],
+        ["photo stops", "sunrise points", "mountains"],
+        ["handlooms", "local markets", "handicrafts", "souvenirs"],
+        [],
+    ]:
         signals = extract_signals(_trip(vibes=vibes))
         total = sum(signals.vibe_source_weights.values())
         assert math.isclose(total, 1.0, abs_tol=0.01), f"vibes={vibes} sum={total}"
+
+
+# ---------------------------------------------------------------------------
+# New vibe taxonomy (Food / Explore / Shopping) — added with the web chip
+# rename. These assert the curated weights and query modifiers fire.
+# ---------------------------------------------------------------------------
+
+
+def test_luxury_dining_blog_dominant() -> None:
+    """Luxury dining is a curated-review vibe → blog should dominate."""
+    signals = extract_signals(_trip(vibes=["luxury dining"]))
+    weights = signals.vibe_source_weights
+    assert weights["blog"] > weights["youtube"]
+    assert weights["blog"] > weights["reddit"]
+    assert "best reviewed" in signals.query_modifiers
+
+
+def test_photo_and_sunrise_youtube_dominant() -> None:
+    """Visual/scenic vibes up-weight YouTube and add a scenic-viewpoint modifier."""
+    signals = extract_signals(_trip(vibes=["photo stops", "sunrise points"]))
+    weights = signals.vibe_source_weights
+    assert weights["youtube"] > weights["blog"]
+    assert weights["youtube"] > weights["reddit"]
+    assert "scenic viewpoints" in signals.query_modifiers
+
+
+def test_shopping_taxonomy_adds_local_markets_modifier() -> None:
+    """Any shopping-taxonomy vibe folds into a 'local markets' search modifier."""
+    signals = extract_signals(_trip(vibes=["handicrafts", "souvenirs"]))
+    assert "local markets" in signals.query_modifiers
+
+
+def test_aesthetic_cafes_modifier() -> None:
+    """Aesthetic cafes vibe biases toward visual sources + cafe-specific modifier."""
+    signals = extract_signals(_trip(vibes=["aesthetic cafes"]))
+    assert "instagrammable cafes" in signals.query_modifiers

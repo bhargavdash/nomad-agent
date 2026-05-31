@@ -298,6 +298,21 @@ _VIBE_WEIGHTS_RAW: dict[str, dict[str, float]] = {
     "shopping": {"youtube": 1.0, "reddit": 1.0, "blog": 1.2},
     "family": {"youtube": 1.0, "reddit": 1.1, "blog": 1.2},
     "romantic": {"youtube": 0.9, "reddit": 0.8, "blog": 1.3},
+    # --- Food taxonomy ---
+    "local favorites": {"youtube": 1.0, "reddit": 1.3, "blog": 1.2},
+    "aesthetic cafes": {"youtube": 1.4, "reddit": 0.8, "blog": 1.2},
+    "luxury dining": {"youtube": 0.7, "reddit": 0.7, "blog": 1.5},
+    # --- Explore taxonomy ---
+    "photo stops": {"youtube": 1.5, "reddit": 0.9, "blog": 1.0},
+    "sunrise points": {"youtube": 1.4, "reddit": 1.1, "blog": 0.9},
+    "religious places": {"youtube": 0.9, "reddit": 1.0, "blog": 1.3},
+    "history & archaeology": {"youtube": 0.8, "reddit": 0.9, "blog": 1.3},
+    "mountains": {"youtube": 1.4, "reddit": 1.1, "blog": 0.9},
+    # --- Shopping taxonomy ---
+    "handlooms": {"youtube": 1.0, "reddit": 1.0, "blog": 1.2},
+    "local markets": {"youtube": 1.2, "reddit": 1.2, "blog": 1.0},
+    "handicrafts": {"youtube": 1.0, "reddit": 1.0, "blog": 1.2},
+    "souvenirs": {"youtube": 1.0, "reddit": 1.1, "blog": 1.1},
 }
 
 
@@ -674,12 +689,34 @@ def _build_query_modifiers(
     vibes_lower = {v.lower() for v in vibes}
     if "budget" in vibes_lower or "backpacking" in vibes_lower:
         mods.append("cheap eats")
-    if "luxury" in vibes_lower:
+    if "luxury" in vibes_lower or "luxury dining" in vibes_lower:
         mods.append("best reviewed")
-    if "foodie" in vibes_lower or "street food" in vibes_lower:
+    if (
+        "foodie" in vibes_lower
+        or "street food" in vibes_lower
+        or "local favorites" in vibes_lower
+    ):
         mods.append("local cuisine")
-    if "culture" in vibes_lower or "history" in vibes_lower:
+    if "aesthetic cafes" in vibes_lower:
+        mods.append("instagrammable cafes")
+    if (
+        "culture" in vibes_lower
+        or "history" in vibes_lower
+        or "history & archaeology" in vibes_lower
+        or "religious places" in vibes_lower
+    ):
         mods.append("cultural landmarks")
+    if "photo stops" in vibes_lower or "sunrise points" in vibes_lower:
+        mods.append("scenic viewpoints")
+    if "mountains" in vibes_lower:
+        mods.append("mountain treks")
+    if (
+        "handlooms" in vibes_lower
+        or "local markets" in vibes_lower
+        or "handicrafts" in vibes_lower
+        or "souvenirs" in vibes_lower
+    ):
+        mods.append("local markets")
 
     # Mix in raw vibe terms (they're useful search words).
     for v in vibes:
