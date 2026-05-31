@@ -1,25 +1,34 @@
-"""Resolve + self-host itinerary imagery at build time.
+"""Resolve + self-host itinerary/trending imagery at build time.
 
-For the trip hero (destination) and each unique city, resolve the best real
-photo (app/tools/place_image), download the bytes, and upload them to the
-public Supabase Storage bucket so the app serves images it controls — no
-hotlink drift, no upstream throttling. Falls back to the upstream URL when an
-upload isn't possible, and to None when no photo is found (the frontend then
-shows its deterministic themed fallback). Best-effort throughout — never raises.
+For the trip hero (destination) and each unique city — and for each trending
+destination — resolve the best real photo (app/tools/place_image), download the
+bytes, and upload them to the public Supabase Storage bucket so the app serves
+images it controls.
+
+Storage is keyed by the PLACE, not the trip: the same (place, context) maps to
+one stored object reused across every trip, so 1000 trips to Jaipur store ONE
+Jaipur photo. A cheap existence check skips resolution + download + upload
+entirely when a place is already hosted — the bucket doubles as a persistent,
+cross-trip cache. Uploads also carry a 1-year cache-control so the Supabase CDN
+and browsers cache the bytes.
+
+Falls back to the upstream URL when hosting is unavailable, and to None when no
+photo is found (the frontend then shows its deterministic themed fallback).
+Best-effort throughout — never raises.
 
 This module is the agent's image-resolution entrypoint. The agent is the SOLE
-writer of trip imagery; Node and web only read the resulting URLs, so there is
-no read/write race.
+writer of imagery; Node and web only read the resulting URLs (no read/write race).
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
-import re
 
 import httpx
 
+from app.config import settings
 from app.db import supabase_writer
 from app.schemas import AIItinerary, TrendingPayload
 from app.tools.place_image import resolve_place_image_url
@@ -28,17 +37,29 @@ logger = logging.getLogger(__name__)
 
 _DOWNLOAD_TIMEOUT = httpx.Timeout(8.0, connect=3.0)
 _MAX_BYTES = 8 * 1024 * 1024  # safety cap; 1280px thumbnails are far smaller
-_EXT_BY_TYPE = {
-    "image/jpeg": "jpg",
-    "image/png": "png",
-    "image/webp": "webp",
-    "image/avif": "avif",
-}
 
 
-def _slug(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return slug or "place"
+def _place_key(query: str, context: str) -> str:
+    """Stable content-address for a (place, context) pair. The same place across
+    different trips -> same key -> one stored object (no duplicate storage).
+    Normalised (strip + lower) so "Jaipur" and " jaipur " dedupe together.
+    """
+    raw = f"{query.strip().lower()}|{context.strip().lower()}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:20]
+
+
+def _public_url(path: str) -> str:
+    base = settings.SUPABASE_URL.rstrip("/")
+    return f"{base}/storage/v1/object/public/{settings.SUPABASE_IMAGE_BUCKET}/{path}"
+
+
+async def _object_exists(client: httpx.AsyncClient, url: str) -> bool:
+    """Cheap HEAD against the public object URL: 200 -> already hosted."""
+    try:
+        resp = await client.head(url)
+        return resp.status_code == 200
+    except Exception:  # noqa: BLE001
+        return False
 
 
 async def _download(client: httpx.AsyncClient, url: str) -> tuple[bytes, str] | None:
@@ -58,12 +79,21 @@ async def _download(client: httpx.AsyncClient, url: str) -> tuple[bytes, str] | 
     return data, ctype
 
 
-async def _resolve_and_host(
-    client: httpx.AsyncClient, query: str, context: str, path_stem: str
-) -> str | None:
-    """Resolve -> download -> upload. Returns a self-hosted public URL; falls
-    back to the upstream URL if the bytes can't be fetched/uploaded; None if
-    nothing resolved."""
+async def _cached_or_host(client: httpx.AsyncClient, query: str, context: str) -> str | None:
+    """Self-hosted public URL for a place, deduped + cached by place key.
+
+    Cache hit (object already in the bucket) -> return its URL with no
+    resolve/download/upload. Miss -> resolve -> download -> upload once. Falls
+    back to the upstream URL if hosting is unavailable, None if nothing resolves.
+    """
+    have_storage = bool(settings.SUPABASE_URL and settings.SUPABASE_SERVICE_ROLE_KEY)
+    path = f"places/{_place_key(query, context)}"
+
+    if have_storage:
+        url = _public_url(path)
+        if await _object_exists(client, url):
+            return url  # cache hit — another trip already hosted this place
+
     upstream = await resolve_place_image_url(query, context)
     if not upstream:
         return None
@@ -71,9 +101,10 @@ async def _resolve_and_host(
     if downloaded is None:
         return upstream  # couldn't fetch bytes — still better than a fallback
     data, ctype = downloaded
-    ext = _EXT_BY_TYPE.get(ctype, "jpg")
-    hosted = await supabase_writer.upload_public_image(data, ctype, f"{path_stem}.{ext}")
-    return hosted or upstream  # upload unavailable — serve the upstream URL
+    hosted = await supabase_writer.upload_public_image(data, ctype, path)
+    # On success return the canonical public URL (identical to the cache-hit
+    # URL, so the DB stores one stable URL per place); upstream if storage off.
+    return _public_url(path) if hosted else upstream
 
 
 async def resolve_and_store_itinerary_images(
@@ -85,13 +116,8 @@ async def resolve_and_store_itinerary_images(
 
     async with httpx.AsyncClient(timeout=_DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
         results = await asyncio.gather(
-            _resolve_and_host(client, destination, "", f"trips/{trip_id}/hero"),
-            *(
-                _resolve_and_host(
-                    client, city, destination, f"trips/{trip_id}/city-{_slug(city)}"
-                )
-                for city in cities
-            ),
+            _cached_or_host(client, destination, ""),
+            *(_cached_or_host(client, city, destination) for city in cities),
         )
 
     hero_url: str | None = results[0]
@@ -109,22 +135,13 @@ async def resolve_and_store_itinerary_images(
 async def resolve_and_store_trending_images(payload: TrendingPayload) -> None:
     """Set a self-hosted ``imageUrl`` on every trending destination, in place.
 
-    Called at trending-refresh write time so the Node /trending endpoint serves
-    stored URLs directly — no lazy on-read hydration, hence no race. Always
-    overwrites imageUrl (with None when nothing resolves) so a stale or
-    LLM-hallucinated value can't leak through. Never raises.
+    Same place-keyed dedup/cache as trips. Always overwrites imageUrl (None when
+    nothing resolves) so a stale/LLM-hallucinated value can't leak. Never raises.
     """
     dests = [*payload.india, *payload.international]
 
     async with httpx.AsyncClient(timeout=_DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
-        urls = await asyncio.gather(
-            *(
-                _resolve_and_host(
-                    client, d.name, d.country, f"trending/{_slug(d.name)}-{_slug(d.country)}"
-                )
-                for d in dests
-            )
-        )
+        urls = await asyncio.gather(*(_cached_or_host(client, d.name, d.country) for d in dests))
 
     resolved = sum(1 for url in urls if url)
     for dest, url in zip(dests, urls):
