@@ -107,12 +107,17 @@ async def _cached_or_host(client: httpx.AsyncClient, query: str, context: str) -
     return _public_url(path) if hosted else upstream
 
 
-async def resolve_and_store_itinerary_images(
-    trip_id: str, destination: str, itinerary: AIItinerary
+async def resolve_and_store_places(
+    trip_id: str, destination: str, cities: list[str]
 ) -> tuple[str | None, dict[str, str | None]]:
-    """Hero (destination) + one image per unique city, deduped so a repeated
-    city resolves once. Never raises — returns whatever was found."""
-    cities = list(dict.fromkeys(d.city for d in itinerary.days if d.city))
+    """Resolve + self-host the hero (destination) and one image per unique city.
+
+    Deduped so a repeated city resolves once. Never raises — returns whatever
+    was found. Shared by the build-time path (resolve_and_store_itinerary_images)
+    and the offline backfill (scripts/backfill_images.py) so both go through the
+    identical single-writer hosting/dedup/cache logic.
+    """
+    cities = list(dict.fromkeys(c for c in cities if c))
 
     async with httpx.AsyncClient(timeout=_DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
         results = await asyncio.gather(
@@ -130,6 +135,15 @@ async def resolve_and_store_itinerary_images(
         len(cities),
     )
     return hero_url, city_images
+
+
+async def resolve_and_store_itinerary_images(
+    trip_id: str, destination: str, itinerary: AIItinerary
+) -> tuple[str | None, dict[str, str | None]]:
+    """Hero (destination) + one image per unique city, deduped. Never raises."""
+    return await resolve_and_store_places(
+        trip_id, destination, [d.city for d in itinerary.days if d.city]
+    )
 
 
 async def resolve_and_store_trending_images(payload: TrendingPayload) -> None:

@@ -165,6 +165,42 @@ async def mark_trip_ready(
     await asyncio.to_thread(_mark)
 
 
+async def backfill_trip_images(
+    trip_id: str,
+    hero_image_url: str | None,
+    city_images: dict[str, str | None],
+) -> None:
+    """Heal a pre-existing trip's imagery WITHOUT touching status or stats.
+
+    Targeted UPDATE used by the offline backfill (scripts/backfill_images.py):
+    sets trips.hero_image_url (only when resolved) and stamps
+    images_resolved_at so the trip is never re-backfilled, then sets
+    itinerary_days.image_url per city — only when resolved, so an existing
+    value is never clobbered with None. Mirrors the columns the build-time
+    writers own (mark_trip_ready + write_itinerary) but leaves the trip's
+    status/stats/days/stops intact. Off the read path by design — see
+    nomad-web/IMAGE_PIPELINE.md §7.
+    """
+
+    def _write() -> None:
+        client = _get_client()
+        trip_payload: dict[str, Any] = {
+            "images_resolved_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if hero_image_url is not None:
+            trip_payload["hero_image_url"] = hero_image_url
+        client.table("trips").update(trip_payload).eq("id", trip_id).execute()
+
+        for city, url in city_images.items():
+            if not city or url is None:
+                continue
+            client.table("itinerary_days").update({"image_url": url}).eq(
+                "trip_id", trip_id
+            ).eq("city", city).execute()
+
+    await asyncio.to_thread(_write)
+
+
 async def update_trip_overview(trip_id: str, itinerary: AIItinerary) -> None:
     """Write the Tier 2 trip-level planning surface onto the trips row.
 
