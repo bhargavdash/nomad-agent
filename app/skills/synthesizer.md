@@ -65,7 +65,7 @@ EXAMPLES (illustrate the standard — don't copy them):
 - BAD stop description: "A palace in Jaipur, also known as City Palace."
 - GOOD stop description: "Pink-sandstone Rajput palace, still the royal family's residence. Mubarak Mahal courtyard is the photo spot — go before 10 to beat the tour-bus crowds."
 
-GOOD `tags`: 1-3 short tokens, emoji or short word, e.g. ["🍽️", "🌅"], ["📍", "viewpoint"], ["☕", "morning"]. Always include at least one tag.
+GOOD `tags`: 1-3 short plain-text tokens, no emoji. e.g. ["food", "sunset"], ["viewpoint", "morning"], ["heritage", "photo stop"]. Always include at least one tag.
 
 OUTPUT JSON shape: {{"route_summary": "<city circuit + days each, or single-city arc>", "transport_strategy": "<how to get between cities and around within them>", "stay_by_city": {{"<city>": "<neighbourhood/area + stay type in the budget tier>"}}, "budget_estimate": "<rough total for the whole group, ranges fine>", "days": [<day>, ...]}}.
 Each day: {{"dayNumber": int, "city": "<city>", "title": "<short title>", "description": "<1-3 sentence narrative>", "highlights": ["<concrete takeaway>", "..."], "stops": [...]}}.

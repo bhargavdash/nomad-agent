@@ -581,7 +581,7 @@ def _coerce_tags_for_stop(tags: list[str]) -> list[str]:
     """Ensure 1-4 non-empty tags."""
     cleaned = [t.strip() for t in tags if t and t.strip()]
     if not cleaned:
-        cleaned = ["📍"]
+        cleaned = ["place"]
     return cleaned[:4]
 
 
@@ -788,14 +788,14 @@ def _default_anchor_stop(sort_order: int, index_in_day: int, city: str) -> AISto
     """
     safe_city = (city or "this city").strip() or "this city"
     presets = [
-        ("9:00", "AM", "1h", f"Morning coffee in {safe_city}", "☕"),
-        ("11:00", "AM", "2h", f"Old {safe_city} market walk", "🛍️"),
-        ("1:00", "PM", "1h30m", f"Lunch in {safe_city}", "🍽️"),
-        ("4:00", "PM", "1h30m", f"Sunset point near {safe_city}", "🌅"),
-        ("7:30", "PM", "1h30m", f"Dinner in {safe_city}", "🍴"),
-        ("9:30", "PM", "1h", f"Evening walk through {safe_city}", "🌙"),
+        ("9:00", "AM", "1h", f"Morning coffee in {safe_city}", "morning"),
+        ("11:00", "AM", "2h", f"Old {safe_city} market walk", "shopping"),
+        ("1:00", "PM", "1h30m", f"Lunch in {safe_city}", "dining"),
+        ("4:00", "PM", "1h30m", f"Sunset point near {safe_city}", "sunset"),
+        ("7:30", "PM", "1h30m", f"Dinner in {safe_city}", "dining"),
+        ("9:30", "PM", "1h", f"Evening walk through {safe_city}", "evening"),
     ]
-    time, ampm, duration, name, emoji = presets[index_in_day % len(presets)]
+    time, ampm, duration, name, tag = presets[index_in_day % len(presets)]
     return AIStop(
         sortOrder=sort_order,
         time=time,
@@ -807,7 +807,7 @@ def _default_anchor_stop(sort_order: int, index_in_day: int, city: str) -> AISto
             f"in {safe_city} you've already saved."
         ),
         source="maps",
-        tags=[emoji],
+        tags=[tag],
     )
 
 
@@ -853,13 +853,13 @@ def _skeleton_itinerary(
         for c in day_cands:
             primary = max(c.sources, key=lambda s: _SOURCE_PRIORITY.get(s, 0))
             preset_idx = sort_order - 1
-            time, ampm, duration, _name, emoji = [
-                ("9:00", "AM", "1h30m", "x", "☕"),
-                ("11:00", "AM", "2h", "x", "📍"),
-                ("2:00", "PM", "2h", "x", "🏛️"),
-                ("5:00", "PM", "1h30m", "x", "🌅"),
-                ("7:00", "PM", "2h", "x", "🍽️"),
-                ("9:00", "PM", "1h", "x", "🌙"),
+            time, ampm, duration, _name, tag = [
+                ("9:00", "AM", "1h30m", "x", "morning"),
+                ("11:00", "AM", "2h", "x", "landmark"),
+                ("2:00", "PM", "2h", "x", "heritage"),
+                ("5:00", "PM", "1h30m", "x", "sunset"),
+                ("7:00", "PM", "2h", "x", "dining"),
+                ("9:00", "PM", "1h", "x", "evening"),
             ][preset_idx % 6]
             body = c.body[:160] or "Discovered during research."
             try:
@@ -872,7 +872,7 @@ def _skeleton_itinerary(
                         name=c.title,
                         description=body,
                         source=primary,
-                        tags=[emoji],
+                        tags=[tag],
                     )
                 )
                 sort_order += 1
