@@ -56,6 +56,7 @@ from app import cache  # noqa: E402
 from app.geo import build_geo_brief  # noqa: E402
 from app.observability import configure_observability  # noqa: E402
 from app.schemas import ResearchDiscovery, TripParams  # noqa: E402
+from app.pool_filter import filter_pool_for_user  # noqa: E402
 from app.signals import enrich_anchor_hints, enrich_signals_with_llm, extract_signals  # noqa: E402
 
 
@@ -160,11 +161,12 @@ async def run_pipeline_sequential(trip: TripParams) -> dict:
         file=sys.stderr,
     )
 
-    _banner("Stage 1.5 — Research cache check (L1)")
-    all_discoveries = await cache.get_cached_research(trip.destination)
+    _banner("Stage 1.5 — Research cache check (L0)")
+    all_discoveries = await cache.get_cached_research(trip.destination, signals.season)
     if all_discoveries is not None:
         print(
-            f"CACHE HIT — {len(all_discoveries)} discoveries reused (skipping all research agents)",
+            f"CACHE HIT — {len(all_discoveries)} discoveries reused "
+            f"(season={signals.season})",
             file=sys.stderr,
         )
     else:
@@ -212,7 +214,7 @@ async def run_pipeline_sequential(trip: TripParams) -> dict:
             *reddit_discoveries,
             *google_discoveries,
         ]
-        await cache.set_cached_research(trip.destination, all_discoveries)
+        await cache.set_cached_research(trip.destination, signals.season, all_discoveries)
         print(
             f"Anchor seeds     : {len(anchor_seeds)} "
             f"(from top_anchors={signals.top_anchors})\n"
@@ -222,7 +224,15 @@ async def run_pipeline_sequential(trip: TripParams) -> dict:
             file=sys.stderr,
         )
 
-    _banner("Stage 5.5 — Geo brief (city circuit + distances + sun times)")
+    _banner("Stage 5.5 — Pool filter (vibe-scoring + cap)")
+    synthesizer_pool = filter_pool_for_user(all_discoveries, signals)
+    print(
+        f"Pool: {len(all_discoveries)} broad → {len(synthesizer_pool)} filtered "
+        f"(vibe_cluster={signals.vibe_cluster})",
+        file=sys.stderr,
+    )
+
+    _banner("Stage 5.6 — Geo brief (city circuit + distances + sun times)")
     geo_brief = await build_geo_brief(trip, signals)
     if geo_brief.is_empty():
         print("Geo brief: (empty — geocoding unavailable, synth falls back)", file=sys.stderr)
@@ -230,7 +240,7 @@ async def run_pipeline_sequential(trip: TripParams) -> dict:
         print(geo_brief.to_prompt_block(), file=sys.stderr)
 
     _banner("Stage 6 — Synthesizer (LLM call)")
-    itinerary = await run_synthesizer(trip, signals, all_discoveries, geo_brief)
+    itinerary = await run_synthesizer(trip, signals, synthesizer_pool, geo_brief)
     print(
         f"Days       : {len(itinerary.days)}\n"
         f"Total stops: {sum(len(d.stops) for d in itinerary.days)}\n"

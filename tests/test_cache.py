@@ -1,7 +1,12 @@
-"""Tests for the Redis cache layer (Milestone C, L1) + pipeline cache behavior.
+"""Tests for the Redis cache layer (L0) + pipeline cache behavior.
 
 Uses fakeredis (no real Redis) and verifies graceful degradation when caching
-is disabled. Pipeline tests patch the cache so research nodes no-op on a hit.
+is disabled.
+
+L0 design: cache key is destination+season only (vibe-agnostic). The old
+FI-6 vibe_cluster dimension has been removed from the key — the broad pool
+is now shared across all vibe preferences for a given destination+season and
+narrowed at read time by pool_filter.py.
 """
 
 from __future__ import annotations
@@ -48,20 +53,43 @@ def test_slug_normalises() -> None:
 @pytest.mark.asyncio
 async def test_research_roundtrip(fake_redis) -> None:
     dest = "Goa, India"
-    assert await cache_mod.get_cached_research(dest) is None  # cold miss
+    season = "peak"
+    assert await cache_mod.get_cached_research(dest, season) is None  # cold miss
     pool = [_disc("Anjuna Beach", "youtube"), _disc("Fontainhas", "blog")]
-    await cache_mod.set_cached_research(dest, pool)
-    got = await cache_mod.get_cached_research(dest)
+    await cache_mod.set_cached_research(dest, season, pool)
+    got = await cache_mod.get_cached_research(dest, season)
     assert got is not None
     assert [d.title for d in got] == ["Anjuna Beach", "Fontainhas"]
     assert got[0].source == "youtube"
 
 
 @pytest.mark.asyncio
-async def test_research_key_is_destination_only(fake_redis) -> None:
-    # Same destination, different casing/spacing → same cache entry.
-    await cache_mod.set_cached_research("Goa, India", [_disc("X")])
-    assert await cache_mod.get_cached_research("  goa,  india ") is not None
+async def test_research_key_is_destination_season(fake_redis) -> None:
+    # Same destination+season, different casing/spacing → same cache entry.
+    await cache_mod.set_cached_research("Goa, India", "peak", [_disc("X")])
+    assert await cache_mod.get_cached_research("  goa,  india ", "peak") is not None
+
+
+@pytest.mark.asyncio
+async def test_research_different_vibes_share_same_pool(fake_redis) -> None:
+    # L0 design: vibe_cluster is NOT a cache dimension.
+    # Both adventure and foodie users for Goa+peak read the same pool.
+    pool = [_disc("Anjuna Beach"), _disc("Vinayak Fish Curry")]
+    await cache_mod.set_cached_research("Goa", "peak", pool)
+
+    # Any vibe combination reading Goa+peak gets the same pool.
+    got_adventure = await cache_mod.get_cached_research("Goa", "peak")
+    got_foodie = await cache_mod.get_cached_research("Goa", "peak")
+    assert got_adventure is not None and len(got_adventure) == 2
+    assert got_foodie is not None and len(got_foodie) == 2
+    assert got_adventure[0].title == got_foodie[0].title
+
+
+@pytest.mark.asyncio
+async def test_research_different_seasons_are_separate(fake_redis) -> None:
+    # Season is still a cache dimension — monsoon Goa ≠ peak Goa.
+    await cache_mod.set_cached_research("Goa", "peak", [_disc("Dec Stop")])
+    assert await cache_mod.get_cached_research("Goa", "monsoon") is None
 
 
 @pytest.mark.asyncio
@@ -77,17 +105,17 @@ async def test_geocode_roundtrip(fake_redis) -> None:
 @pytest.mark.asyncio
 async def test_disabled_when_no_client(monkeypatch) -> None:
     monkeypatch.setattr(cache_mod, "_get_client", lambda: None)
-    assert await cache_mod.get_cached_research("Goa") is None
+    assert await cache_mod.get_cached_research("Goa", "peak") is None
     # set is a no-op (must not raise) when caching is disabled.
-    await cache_mod.set_cached_research("Goa", [_disc("X")])
+    await cache_mod.set_cached_research("Goa", "peak", [_disc("X")])
     assert await cache_mod.get_cached_geocode("Goa") is None
     await cache_mod.set_cached_geocode("Goa", (1.0, 2.0))
 
 
 @pytest.mark.asyncio
 async def test_corrupt_payload_returns_none(fake_redis) -> None:
-    await fake_redis.set(cache_mod._research_key("Goa"), "not json{")
-    assert await cache_mod.get_cached_research("Goa") is None  # graceful, no raise
+    await fake_redis.set(cache_mod._research_key("Goa", "peak"), "not json{")
+    assert await cache_mod.get_cached_research("Goa", "peak") is None  # graceful
 
 
 # --- pipeline cache behavior ------------------------------------------------
@@ -140,3 +168,31 @@ async def test_merge_uses_cached_pool_on_hit(monkeypatch) -> None:
         {"trip_params": trip, "signals": extract_signals(trip), "research_cache": pool}
     )
     assert out["all_discoveries"] == pool
+
+
+@pytest.mark.asyncio
+async def test_pool_filter_narrows_large_pool(monkeypatch) -> None:
+    from app.graph import pipeline
+
+    # Build a pool larger than DEFAULT_MAX_ITEMS (15).
+    big_pool = [_disc(f"Place {i}", "blog") for i in range(20)]
+    trip = _trip()
+    signals = extract_signals(trip)
+    state = {"trip_params": trip, "signals": signals, "all_discoveries": big_pool}
+
+    out = await pipeline.pool_filter_node(state)
+    assert "synthesizer_pool" in out
+    assert len(out["synthesizer_pool"]) <= 15
+
+
+@pytest.mark.asyncio
+async def test_pool_filter_passthrough_small_pool(monkeypatch) -> None:
+    from app.graph import pipeline
+
+    small_pool = [_disc("Anjuna Beach", "youtube"), _disc("Fontainhas", "blog")]
+    trip = _trip()
+    signals = extract_signals(trip)
+    state = {"trip_params": trip, "signals": signals, "all_discoveries": small_pool}
+
+    out = await pipeline.pool_filter_node(state)
+    assert out["synthesizer_pool"] == small_pool

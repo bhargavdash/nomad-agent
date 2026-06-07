@@ -222,56 +222,58 @@ class _ExtractionResult(BaseModel):
 
 
 def _build_queries(trip_params: TripParams, signals: TravelSignals) -> list[str]:
-    """Return 3–5 narrow queries derived from trip params + signals.
+    """Return 4–6 broad queries covering all four vibe clusters.
 
-    Destination-agnostic: every query is a template of `{destination}` plus
-    one broad axis (vlog, food, vibe, season, offbeat). No place-specific
-    keyword lists.
+    L0 broad-mode design: queries are vibe-agnostic so the cached pool can
+    be shared across users with different preferences. The user-specific
+    first-vibe slot from the old implementation is replaced with a fixed
+    set of canonical queries that cover adventure, foodie, cultural, and
+    relaxation discovery angles. Per-user vibe preference is applied at
+    read time by pool_filter.py, not here.
+
+    Q1 + Q2 + Q3 always run (anchor / vlog / food verticals).
+    Q4 covers the adventure/offbeat cluster.
+    Q5 covers the cultural cluster (complements Q3's anchor angle).
+    Q6 is the season slot — only fired for informative season buckets.
+
+    Cap raised to 6 (from 5) to accommodate the extra cluster query.
 
     Examples:
-      Goa, India + vibes=[beaches,...] + season=monsoon →
-        ['Goa, India travel vlog',
-         'Goa, India food',
-         'Goa, India beaches',
-         'Goa, India monsoon',
-         'Goa, India hidden places']
-      Reykjavik, Iceland + vibes=[northern lights] + season=winter →
-        ['Reykjavik, Iceland travel vlog',
-         'Reykjavik, Iceland food',
-         'Reykjavik, Iceland northern lights',
-         'Reykjavik, Iceland winter',
-         'Reykjavik, Iceland hidden places']
+      Goa + season=monsoon →
+        ['Goa travel vlog', 'Goa food', 'top things to do in Goa',
+         'Goa hidden gems offbeat', 'Goa culture history', 'Goa monsoon']
+      Reykjavik + season=winter →
+        ['Reykjavik travel vlog', 'Reykjavik food',
+         'top things to do in Reykjavik',
+         'Reykjavik hidden gems offbeat', 'Reykjavik culture history',
+         'Reykjavik winter']
     """
     dest = trip_params.destination.strip()
     queries: list[str] = []
 
-    # Q1 (always): vlog-style POV content. Lower listicle density than "tourist places".
+    # Q1 (always): vlog-style POV content.
     queries.append(f"{dest} travel vlog")
 
-    # Q2 (always): food vertical — universal, often produces concrete dish/restaurant names.
+    # Q2 (always): food vertical — universal, strong proper-noun yield.
     queries.append(f"{dest} food")
 
-    # Q3 (always): anchor / must-see coverage. Surfaces the famous attractions
-    # every visitor expects (Sentosa, Universal Studios, Marina Bay Sands, etc.).
-    # Sprint 4 benchmark showed the previous "{dest} hidden places" slot
-    # systematically biased away from these — anchors and hidden gems must
-    # coexist, not displace each other.
+    # Q3 (always): anchor / must-see coverage.
     queries.append(f"top things to do in {dest}")
 
-    # Q4: first user vibe if given, else generic discovery prompt.
-    if trip_params.vibes:
-        first_vibe = trip_params.vibes[0].strip()
-        if first_vibe:
-            queries.append(f"{dest} {first_vibe}")
-    elif len(queries) < 5:
-        queries.append(f"things to do in {dest}")
+    # Q4 (always): adventure + offbeat cluster coverage.
+    # Surfaces waterfalls, trekking spots, lesser-known places — content that
+    # Q1–Q3 systematically under-represent because anchors dominate those angles.
+    queries.append(f"{dest} hidden gems offbeat")
 
-    # Q5: season — only if it's an informative bucket. Skip generic/unknown buckets.
+    # Q5 (always): cultural + history cluster coverage.
+    queries.append(f"{dest} culture history")
+
+    # Q6: season — only for informative buckets.
     informative_seasons = {"winter", "summer", "monsoon", "autumn", "spring"}
     if signals.season in informative_seasons:
         queries.append(f"{dest} {signals.season}")
 
-    # Dedupe while preserving order; cap at 5 queries / agent run.
+    # Dedupe while preserving order; cap raised to 6.
     seen: set[str] = set()
     deduped: list[str] = []
     for q in queries:
@@ -280,7 +282,7 @@ def _build_queries(trip_params: TripParams, signals: TravelSignals) -> list[str]
             continue
         seen.add(key)
         deduped.append(q)
-        if len(deduped) >= 5:
+        if len(deduped) >= 6:
             break
     return deduped
 

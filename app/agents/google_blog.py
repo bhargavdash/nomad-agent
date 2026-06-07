@@ -302,40 +302,33 @@ class _AnchorExtractionResult(BaseModel):
 
 
 def _build_queries(trip_params: TripParams, signals: TravelSignals) -> list[str]:
-    """Return 3–4 Tavily queries shaped by destination, vibes, and budget.
+    """Return 3–4 Tavily queries covering all vibe clusters.
 
-    Queries are kept clean (no `-site:` syntax) because Tavily's
-    `exclude_domains` handles filtering. Q1+Q2 cover the must-see anchors
-    so famous attractions (Sentosa, Eiffel Tower, etc.) surface; Q3+Q4
-    cover vibe/budget personalization. Festival/season context is conveyed
-    to the LLM via the user message, not the queries.
+    L0 broad-mode design: both user-specific slots (first-vibe Q3 and
+    budget-tier Q4) are replaced with neutral queries so the cached pool
+    is vibe- and budget-agnostic. Q1+Q2 were already anchor-focused.
+
+    The budget_tier signal is NOT lost — it is still passed to the LLM via
+    the system prompt in _extract_via_llm(), so the synthesizer's context
+    includes budget awareness even though the search queries don't branch on it.
     """
     dest = trip_params.destination.strip()
     queries: list[str] = []
 
-    # Q1 (always): anchor / must-see coverage. Sprint 4 benchmark showed
-    # Singapore missed Sentosa / Universal / SEA Aquarium because the prior
-    # season-aware query never specifically asked for top attractions.
+    # Q1 (always): anchor / must-see coverage.
     queries.append(f"top attractions in {dest}")
 
-    # Q2 (always): second anchor angle — different phrasing surfaces a
-    # different mix of editorial sources.
+    # Q2 (always): second anchor angle — different phrasing, different sources.
     queries.append(f"must see {dest}")
 
-    # Q3: first vibe if given — surfaces niche blog content matching user intent.
-    if trip_params.vibes:
-        first_vibe = trip_params.vibes[0].strip()
-        if first_vibe:
-            queries.append(f"{dest} {first_vibe} travel tips")
+    # Q3: broad travel guide — replaces old first-vibe slot.
+    # "travel guide" surfaces editorial roundups covering multiple clusters.
+    queries.append(f"{dest} travel guide itinerary")
 
-    # Q4: budget-aware. Luxury → hotel/restaurant recs; shoestring → budget tips.
-    if signals.budget_tier == "luxury":
-        queries.append(f"{dest} luxury hotels restaurants experiences")
-    elif signals.budget_tier == "shoestring":
-        queries.append(f"{dest} budget travel tips cheap eats")
-    else:
-        # Mid/premium → general "things to do" or itinerary angle.
-        queries.append(f"{dest} itinerary things to do")
+    # Q4: food + local experience angle — replaces old budget-tier branching.
+    # Covers the foodie cluster while remaining neutral on spend level.
+    # The synthesizer prompt still includes budget_tier for spend framing.
+    queries.append(f"{dest} local food restaurants experiences")
 
     # Dedupe while preserving order.
     seen: set[str] = set()

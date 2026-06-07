@@ -37,6 +37,7 @@ from app.agents.youtube_shorts import run_youtube_agent
 from app import cache
 from app.db import supabase_writer
 from app.geo import GeoBrief, build_geo_brief
+from app.pool_filter import filter_pool_for_user
 from app.schemas import AIItinerary, ResearchDiscovery, TripParams
 from app.signals import TravelSignals, enrich_anchor_hints, enrich_signals_with_llm, extract_signals
 
@@ -47,14 +48,19 @@ class PipelineState(TypedDict, total=False):
     trip_params: TripParams
     signals: TravelSignals
     geo_brief: GeoBrief
-    # L1 cache (Milestone C): cached destination research pool on a HIT, None on
-    # a miss. Set by research_gate; read by the research nodes (to no-op) + merge.
+    # L0 cache: broad destination+season pool on a HIT, None on a miss.
+    # Set by research_gate; read by the research nodes (to no-op) + merge.
     research_cache: list[ResearchDiscovery] | None
     yt_discoveries: list[ResearchDiscovery]
     yt_longform_discoveries: list[ResearchDiscovery]
     reddit_discoveries: list[ResearchDiscovery]
     google_discoveries: list[ResearchDiscovery]
+    # Full broad pool from research / cache — persisted to Supabase by route handler.
     all_discoveries: list[ResearchDiscovery]
+    # Vibe-filtered subset of all_discoveries (≤15 items) — what the synthesizer
+    # actually receives. Kept separate so the route handler still writes the full
+    # pool to research_jobs.discoveries for the FE discovery card.
+    synthesizer_pool: list[ResearchDiscovery]
     itinerary: AIItinerary
     error: str | None
 
@@ -81,18 +87,26 @@ async def signal_node(state: PipelineState) -> dict[str, Any]:
 
 
 async def research_gate_node(state: PipelineState) -> dict[str, Any]:
-    """L1 cache gate. On HIT, set research_cache so the research agents no-op and
-    merge uses the cached pool. On MISS, run the (LLM) anchor enrichment that the
-    research path needs, and signal the agents to run."""
+    """L0 cache gate. On HIT, set research_cache so research agents no-op and
+    merge uses the cached pool. On MISS, run anchor enrichment and let agents run.
+
+    Cache key is destination+season only (vibe-agnostic). The per-user vibe
+    filter runs downstream in pool_filter_node before the synthesizer.
+    """
     destination = state["trip_params"].destination
-    cached = await cache.get_cached_research(destination)
+    signals: TravelSignals = state["signals"]
+    cached = await cache.get_cached_research(destination, signals.season)
     if cached is not None:
         logger.info(
-            "[NODE] research_gate → CACHE HIT n=%d (skipping research agents)",
+            "[NODE] research_gate → CACHE HIT n=%d season=%s (skipping research agents)",
             len(cached),
+            signals.season,
         )
         return {"research_cache": cached}
-    logger.info("[NODE] research_gate → cache miss (running research)")
+    logger.info(
+        "[NODE] research_gate → cache miss season=%s (running research)",
+        signals.season,
+    )
     # Anchors are only needed when we actually research (they get baked into the
     # cached pool). Skipping on hit also avoids an extra LLM call.
     await enrich_anchor_hints(state["signals"], destination)
@@ -255,8 +269,11 @@ async def merge_node(state: PipelineState) -> dict[str, Any]:
                 exc_info=True,
             )
 
-    # Cache the freshly-researched pool for this destination (best-effort).
-    await cache.set_cached_research(destination, all_discoveries)
+    # Cache the freshly-researched broad pool for this destination+season (best-effort).
+    # The pool is vibe-agnostic — all clusters are covered. Per-user filtering
+    # happens downstream in pool_filter_node, not here.
+    sig: TravelSignals = state["signals"]
+    await cache.set_cached_research(destination, sig.season, all_discoveries)
 
     logger.info(
         "[NODE] merge → done  anchors_seeded=%d  all_discoveries=%d  (%.1fs)",
@@ -267,9 +284,31 @@ async def merge_node(state: PipelineState) -> dict[str, Any]:
     return {"all_discoveries": all_discoveries}
 
 
+async def pool_filter_node(state: PipelineState) -> dict[str, Any]:
+    """Narrow the broad L0 pool to the top ~15 discoveries for the synthesizer.
+
+    Reads all_discoveries (full pool, up to ~35 items) and returns
+    synthesizer_pool (scored + capped). Runs after merge_node has written
+    the full pool to the L0 cache and to Supabase mid-flight — so the cache
+    and FE always see the complete pool, while the synthesizer sees only the
+    vibe-relevant subset.
+    """
+    all_disc = state.get("all_discoveries", []) or []
+    signals: TravelSignals = state["signals"]
+    filtered = filter_pool_for_user(all_disc, signals)
+    logger.info(
+        "[NODE] pool_filter → broad=%d filtered=%d vibe_cluster=%s",
+        len(all_disc),
+        len(filtered),
+        signals.vibe_cluster,
+    )
+    return {"synthesizer_pool": filtered}
+
+
 async def synthesizer_node(state: PipelineState) -> dict[str, Any]:
     t0 = time.perf_counter()
-    all_disc = state.get("all_discoveries", [])
+    # Use the vibe-filtered pool if available; fall back to full pool.
+    all_disc = state.get("synthesizer_pool") or state.get("all_discoveries", [])
     logger.info("[NODE] synthesizer → starting  discoveries=%d", len(all_disc))
     itinerary = await run_synthesizer(
         state["trip_params"],
@@ -302,6 +341,7 @@ def build_graph():
     g.add_node("reddit", reddit_node)
     g.add_node("google", google_node)
     g.add_node("merge", merge_node)
+    g.add_node("pool_filter", pool_filter_node)
     g.add_node("synthesizer", synthesizer_node)
 
     g.add_edge(START, "signals")
@@ -309,7 +349,7 @@ def build_graph():
     # geo runs in parallel with the research path (both after signals).
     g.add_edge("signals", "geo")
 
-    # research_gate (L1 cache) gates the 4 research agents. On a cache hit it
+    # research_gate (L0 cache) gates the 4 research agents. On a cache hit it
     # sets research_cache so the agents no-op and merge uses the cached pool.
     g.add_edge("signals", "research_gate")
     g.add_edge("research_gate", "youtube")
@@ -323,8 +363,13 @@ def build_graph():
     g.add_edge("reddit", "merge")
     g.add_edge("google", "merge")
 
-    # Synthesizer waits for BOTH merge (discoveries) and geo (the geo brief).
-    g.add_edge("merge", "synthesizer")
+    # pool_filter narrows the broad pool to the top ~15 for the synthesizer.
+    # Runs after merge has written the full pool to cache + Supabase.
+    g.add_edge("merge", "pool_filter")
+
+    # Synthesizer waits for BOTH pool_filter (vibe-filtered discoveries)
+    # and geo (the geo brief).
+    g.add_edge("pool_filter", "synthesizer")
     g.add_edge("geo", "synthesizer")
     g.add_edge("synthesizer", END)
 
@@ -347,11 +392,13 @@ async def run_pipeline(trip_params: TripParams) -> PipelineState:
     initial: PipelineState = {"trip_params": trip_params}
     final = await graph.ainvoke(initial)
     itinerary = final.get("itinerary")
+    synth_pool = final.get("synthesizer_pool") or []
     logger.info(
-        "run_pipeline.complete  elapsed=%.1fs  cache_hit=%s  discoveries=%d  days=%d",
+        "run_pipeline.complete  elapsed=%.1fs  cache_hit=%s  pool=%d  filtered=%d  days=%d",
         time.perf_counter() - t0,
         final.get("research_cache") is not None,
         len(final.get("all_discoveries") or []),
+        len(synth_pool),
         len(itinerary.days) if itinerary else 0,
     )
     return final  # type: ignore[return-value]

@@ -71,6 +71,12 @@ class TravelSignals:
     # Canonical must-visit landmarks seeded by LLM, independent of vibe-extraction.
     top_anchors: list[str] = field(default_factory=list)
 
+    # Dominant vibe cluster — one of adventure|cultural|relaxation|foodie.
+    # Derived from the trip's vibe list. No longer used in the cache key (L0
+    # cache is destination+season only). Used at read time by pool_filter.py
+    # to score the broad cached pool toward the user's preferred category.
+    vibe_cluster: str = "adventure"
+
 
 # ---------------------------------------------------------------------------
 # Lookup tables — region detection
@@ -314,6 +320,74 @@ _VIBE_WEIGHTS_RAW: dict[str, dict[str, float]] = {
     "handicrafts": {"youtube": 1.0, "reddit": 1.0, "blog": 1.2},
     "souvenirs": {"youtube": 1.0, "reddit": 1.1, "blog": 1.1},
 }
+
+
+# Vibe → cluster mapping (4 buckets). Used by pool_filter at read time to
+# score the broad L0 pool toward the user's dominant preference category.
+# Tie-break order: adventure > foodie > cultural > relaxation.
+_VIBE_CLUSTER: dict[str, str] = {
+    "adventure": "adventure",
+    "off the beaten path": "adventure",
+    "hidden gems": "adventure",
+    "nightlife": "adventure",
+    "nature": "adventure",
+    "beaches": "adventure",
+    "beach": "adventure",
+    "mountains": "adventure",
+    "photo stops": "adventure",
+    "sunrise points": "adventure",
+    "backpacking": "adventure",
+    "culture": "cultural",
+    "history": "cultural",
+    "spiritual": "cultural",
+    "religious places": "cultural",
+    "history & archaeology": "cultural",
+    "iconic": "cultural",
+    "first time": "cultural",
+    "relaxation": "relaxation",
+    "luxury": "relaxation",
+    "romantic": "relaxation",
+    "solo": "relaxation",
+    "family": "relaxation",
+    "shopping": "relaxation",
+    "handlooms": "relaxation",
+    "handicrafts": "relaxation",
+    "souvenirs": "relaxation",
+    "foodie": "foodie",
+    "street food": "foodie",
+    "local favorites": "foodie",
+    "budget": "foodie",
+    "aesthetic cafes": "foodie",
+    "luxury dining": "foodie",
+    "local markets": "foodie",
+}
+
+_CLUSTER_PRIORITY = ("adventure", "foodie", "cultural", "relaxation")
+
+
+def _vibe_cluster(vibes: list[str]) -> str:
+    """Map a list of trip vibes to one of four clusters (read-time use only).
+
+    Each vibe casts a vote; the cluster with the most votes wins.
+    Ties broken by _CLUSTER_PRIORITY order. Unknown vibes are ignored.
+    Defaults to "adventure" when the list is empty or all unknown.
+
+    The result is stored on TravelSignals.vibe_cluster and consumed by
+    pool_filter.filter_pool_for_user() to score the L0 pool — it is NOT
+    used as a cache key dimension.
+    """
+    votes: dict[str, int] = {}
+    for v in vibes:
+        cluster = _VIBE_CLUSTER.get(v.strip().lower())
+        if cluster:
+            votes[cluster] = votes.get(cluster, 0) + 1
+    if not votes:
+        return "adventure"
+    max_votes = max(votes.values())
+    for cluster in _CLUSTER_PRIORITY:
+        if votes.get(cluster, 0) == max_votes:
+            return cluster
+    return "adventure"
 
 
 def _normalise(weights: dict[str, float]) -> dict[str, float]:
@@ -781,6 +855,7 @@ def extract_signals(trip_params: TripParams) -> TravelSignals:
     warnings = _build_warnings(season, region, destination_lower, weather_hint)
     seasonal_tips = _build_seasonal_tips(season, region, month, destination_lower)
     currency_hint = _currency_hint(region, destination_lower)
+    cluster = _vibe_cluster(trip_params.vibes)
 
     return TravelSignals(
         region=region,
@@ -797,6 +872,7 @@ def extract_signals(trip_params: TripParams) -> TravelSignals:
         warnings=warnings,
         seasonal_tips=seasonal_tips,
         currency_hint=currency_hint,
+        vibe_cluster=cluster,
     )
 
 
@@ -1064,4 +1140,5 @@ async def enrich_signals_with_llm(signals: TravelSignals, trip_params: TripParam
         warnings=warnings,
         seasonal_tips=seasonal_tips,
         currency_hint=currency_hint,
+        vibe_cluster=signals.vibe_cluster,
     )

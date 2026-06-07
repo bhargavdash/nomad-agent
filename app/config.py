@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = ""
     # Bump to invalidate all cached research at once (e.g. after a schema/agent
     # change). Part of every cache key.
-    CACHE_VERSION: str = "v1"
+    CACHE_VERSION: str = "v2"
     # Destination research is reusable but ages — bound staleness.
     RESEARCH_CACHE_TTL_DAYS: int = 45
 

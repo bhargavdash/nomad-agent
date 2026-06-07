@@ -31,6 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app import cache  # noqa: E402
+from app.pool_filter import filter_pool_for_user  # noqa: E402
 from app.agents.google_blog import run_google_blog_agent  # noqa: E402
 from app.agents.reddit import run_reddit_agent  # noqa: E402
 from app.agents.synthesizer import run_synthesizer  # noqa: E402
@@ -60,7 +61,7 @@ async def _build_itinerary(trip: TripParams) -> tuple[AIItinerary, TravelSignals
     signals = extract_signals(trip)
     signals = await enrich_signals_with_llm(signals, trip)
 
-    all_discoveries = await cache.get_cached_research(trip.destination)
+    all_discoveries = await cache.get_cached_research(trip.destination, signals.season)
     if all_discoveries is None:
         await enrich_anchor_hints(signals, trip.destination)
         yt = await run_youtube_agent(trip, signals)
@@ -77,10 +78,11 @@ async def _build_itinerary(trip: TripParams) -> tuple[AIItinerary, TravelSignals
             for i, name in enumerate(signals.top_anchors or [])
         ]
         all_discoveries = [*seeds, *yt, *rd, *gg]
-        await cache.set_cached_research(trip.destination, all_discoveries)
+        await cache.set_cached_research(trip.destination, signals.season, all_discoveries)
 
+    synthesizer_pool = filter_pool_for_user(all_discoveries, signals)
     geo_brief = await build_geo_brief(trip, signals)
-    return await run_synthesizer(trip, signals, all_discoveries, geo_brief), signals
+    return await run_synthesizer(trip, signals, synthesizer_pool, geo_brief), signals
 
 
 async def _amain() -> int:

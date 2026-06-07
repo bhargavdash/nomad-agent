@@ -131,33 +131,33 @@ LONGFORM_CHANNEL_BLACKLIST: set[str] = {
 
 
 def _build_queries(trip_params: TripParams, signals: TravelSignals) -> list[str]:
-    """Return 3-4 long-form queries — vlog / food / vibe / season.
+    """Return 4-5 broad long-form queries covering all vibe clusters.
 
-    Different from Shorts: drops the "{dest} hidden places" query (biases too
-    far toward Shorts results on the medium-duration filter) and replaces it
-    with "{dest} travel guide" — but the listicle regex catches the worst of
-    the "Ultimate Guide" titles afterwards.
+    L0 broad-mode design (mirrors youtube_shorts._build_queries): the
+    first-vibe slot is replaced with a fixed itinerary query so the pool is
+    vibe-agnostic and shareable across users. Cap raised from 4 → 5.
+
+    Long-form difference from Shorts: omits "{dest} hidden gems offbeat"
+    (that query biases results toward short-form clips on the duration filter)
+    and replaces it with "{dest} itinerary" — listicle/SEO vlogs are caught
+    downstream by LONGFORM_LISTICLE_TITLE_RE.
     """
     dest = trip_params.destination.strip()
     queries: list[str] = []
-    # Q1: POV vlog. Long-form vlogs are the canonical authentic content.
+    # Q1: POV vlog — canonical authentic long-form content.
     queries.append(f"{dest} travel vlog")
-    # Q2: food vertical. Strong proper-noun yield (dish + restaurant names).
+    # Q2: food vertical — strong proper-noun yield.
     queries.append(f"{dest} food guide")
-    # Q3: first vibe — or itinerary angle as fallback.
-    if trip_params.vibes:
-        first_vibe = trip_params.vibes[0].strip()
-        if first_vibe:
-            queries.append(f"{dest} {first_vibe}")
-        else:
-            queries.append(f"{dest} itinerary")
-    else:
-        queries.append(f"{dest} itinerary")
-    # Q4: season — only when informative.
+    # Q3: itinerary angle — broad discovery, good for multi-day vlogs.
+    # No longer user-vibe-specific; itinerary content covers all clusters.
+    queries.append(f"{dest} itinerary")
+    # Q4: cultural + history cluster (complements vlog/food angles).
+    queries.append(f"{dest} culture history")
+    # Q5: season — only when informative.
     informative_seasons = {"winter", "summer", "monsoon", "autumn", "spring"}
     if signals.season in informative_seasons:
         queries.append(f"{dest} {signals.season}")
-    # Dedupe + cap.
+    # Dedupe + cap raised to 5.
     seen: set[str] = set()
     out: list[str] = []
     for q in queries:
@@ -166,7 +166,7 @@ def _build_queries(trip_params: TripParams, signals: TravelSignals) -> list[str]
             continue
         seen.add(key)
         out.append(q)
-        if len(out) >= 4:
+        if len(out) >= 5:
             break
     return out
 

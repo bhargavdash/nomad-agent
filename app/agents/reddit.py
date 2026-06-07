@@ -307,37 +307,42 @@ def _build_subreddits(trip_params: TripParams) -> list[str]:
 
 
 def _build_queries(trip_params: TripParams, signals: TravelSignals) -> list[str]:
-    """Return 4–6 narrow queries derived from trip params + signals.
+    """Return 4–6 broad queries covering all vibe clusters.
 
-    Query themes are Reddit-specific: tips, warnings, hidden gems, vibe, season.
-    crowd_level=peak / very_peak adds an "avoid tourists" modifier per spec.
+    L0 broad-mode design: the first-vibe Q4 slot is replaced with a neutral
+    activities query so the cached pool is vibe-agnostic. Q1–Q3 were already
+    vibe-neutral; Q5 (season) and Q6 (festival) are destination+time signals,
+    not user preference, so they stay.
+
+    Known limitation: Q6 (festival) and Q3 (crowd branch) are shaped by the
+    first cold-miss user's travel dates. This is a destination+time signal
+    (not user preference) and the contamination risk is low.
     """
     dest = trip_params.destination.strip()
     queries: list[str] = []
 
-    # Q1 (always): tips
+    # Q1 (always): tips — Reddit's most common and useful format.
     queries.append(f"{dest} tips")
 
-    # Q2 (always): warnings — Reddit's superpower
+    # Q2 (always): warnings — Reddit's superpower.
     queries.append(f"{dest} what to avoid")
 
-    # Q3: crowd-level-driven hidden-gem query (per spec).
+    # Q3: crowd-level-driven discovery. crowd_level is a destination+time
+    # signal (derived from dates), not a user preference — keeping the branch.
     if signals.crowd_level in {"peak", "very_peak"}:
         queries.append(f"{dest} hidden gems avoid tourists")
     else:
         queries.append(f"{dest} hidden gems")
 
-    # Q4: first vibe — picks up community discussion of the user's interest.
-    if trip_params.vibes:
-        first_vibe = trip_params.vibes[0].strip()
-        if first_vibe:
-            queries.append(f"{dest} {first_vibe}")
+    # Q4: broad activities query — replaces the old user-vibe slot.
+    # Covers adventure, cultural, and relaxation angles without user bias.
+    queries.append(f"{dest} things to do activities")
 
-    # Q5: season — informative buckets only.
+    # Q5: season — informative buckets only. Destination+time signal, not user.
     if signals.season in {"monsoon", "winter", "summer", "peak"}:
         queries.append(f"{dest} {signals.season}")
 
-    # Q6: festival query if any active.
+    # Q6: festival — also destination+time, not user preference.
     if signals.active_festivals:
         queries.append(f"{dest} {signals.active_festivals[0]}")
 
