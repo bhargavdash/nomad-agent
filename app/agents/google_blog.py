@@ -396,8 +396,9 @@ async def _extract_via_llm(
         f"Budget: {signals.budget_tier}\n"
         f"{festival_line}"
         f"{crowd_line}"
-        f"Vibes: {', '.join(trip_params.vibes) if trip_params.vibes else '—'}\n\n"
-        f"Travel blog articles:\n\n"
+        f"Vibes: {', '.join(trip_params.vibes) if trip_params.vibes else '—'}\n"
+        + (f"Traveler's own words (highest priority): {trip_params.preferences}\n" if trip_params.preferences else "")
+        + f"\nTravel blog articles:\n\n"
         f"{_format_articles_for_prompt(articles)}\n\n"
         f"Extract up to 8 concrete discoveries. Empty list is acceptable if articles "
         f"carry no specific content."

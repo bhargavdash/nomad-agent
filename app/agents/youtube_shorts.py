@@ -696,8 +696,9 @@ async def _pass2_synthesize(
         f"Trip dates: {trip_params.date_from} to {trip_params.date_to}\n"
         f"Season: {signals.season} (crowd level: {signals.crowd_level})\n"
         f"{festival_line}"
-        f"Vibes: {', '.join(trip_params.vibes) if trip_params.vibes else '—'}\n\n"
-        f"Clusters of place mentions extracted from short-form YouTube videos:\n\n"
+        f"Vibes: {', '.join(trip_params.vibes) if trip_params.vibes else '—'}\n"
+        + (f"Traveler's own words (highest priority): {trip_params.preferences}\n" if trip_params.preferences else "")
+        + f"\nClusters of place mentions extracted from short-form YouTube videos:\n\n"
         f"{_format_clusters_for_pass2(clusters)}\n\n"
         f"Write up to 8 discoveries from these clusters. Drop weak clusters. "
         f"Use only the evidence shown. Empty list is acceptable."

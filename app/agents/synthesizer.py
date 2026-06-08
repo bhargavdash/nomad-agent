@@ -449,6 +449,16 @@ def _build_prompt(
         system = system + "\n\n" + "\n\n".join(load_skill(name) for name in overlays)
         logger.info("synthesizer.overlays=%s", overlays)
     vibes_str = ", ".join(trip_params.vibes) if trip_params.vibes else "—"
+    travelers_raw = (trip_params.travelers or "2").strip()
+    travelers_int = int(travelers_raw) if travelers_raw.isdigit() else 2
+    if travelers_int == 1:
+        travelers_hint = "solo — favour solo-friendly spots; include a safety/practical note where relevant"
+    elif travelers_int == 2:
+        travelers_hint = "couple — weave in 1–2 romantic moments (rooftop, quiet beach, candlelit dinner) where natural"
+    elif travelers_int <= 4:
+        travelers_hint = f"small group of {travelers_int} — prefer venues that seat small groups comfortably"
+    else:
+        travelers_hint = f"group of {travelers_int} — prefer large-capacity venues; note where advance booking matters"
     voice_cues = (
         "=== Voice cues ===\n"
         f"Vibes the traveler picked: {vibes_str}. "
@@ -456,8 +466,12 @@ def _build_prompt(
         "(named dish / architect / trail / beach / club), not the bare word.\n"
         f"Budget tier: {trip_params.budget} (= {_BUDGET_HINT.get(trip_params.budget, 'mid-range')}). "
         "Pick cafés, stays, and dining accordingly — never above this tier.\n"
-        f"Pace: {trip_params.pace} → aim for ~{target_per_day} stops/day, "
-        "emit fewer if the research is thin.\n"
+        f"Pace: {trip_params.pace} → aim for ~{target_per_day} stops/day, emit fewer if research is thin. "
+        f"({_PACE_HINT.get(trip_params.pace, '')})\n"
+        f"Accommodation: {trip_params.accommodation} — "
+        f"{_ACCOMMODATION_HINT.get(trip_params.accommodation, 'standard comfort')}. "
+        "Budget caps spend; accommodation type guides neighbourhood feel and stay context.\n"
+        f"Group: {travelers_hint}\n"
     )
     # The traveler's free-text request is the single most direct expression of
     # intent. It MUST win over generic vibe inference when the two conflict.
@@ -504,6 +518,38 @@ _BUDGET_HINT: dict[str, str] = {
     "Medium": "mid-range — cafés, family restaurants, boutique guesthouses",
     "High": "premium — chef-led spots, boutique hotels",
     "Very-High": "luxury — heritage-palace / Michelin-tier dining and stays",
+}
+
+# Pace → day-shape guidance injected into voice_cues. Compact gloss only —
+# the synthesizer.md PACE RULES carry the full principles to avoid duplication.
+# Sunrise-anchored start times assume geo_brief sunrise is already in the prompt
+# (rule 22); these offsets tell the LLM how to interpret it per pace.
+_PACE_HINT: dict[str, str] = {
+    "Slow & Soulful": (
+        "linger and go deep, not wide — sit in places, soak atmosphere. "
+        "Start ~2 h after sunrise. Each stop: 2–3 h. "
+        "Favour cafés, gardens, markets, viewpoints to sit at. 2–3 stops/day is ideal."
+    ),
+    "Balanced": (
+        "mix of active and restful. Start ~1 h after sunrise. "
+        "3–4 stops/day; vary density across days — a busier day earns a lighter one. "
+        "Include a proper sit-down meal."
+    ),
+    "Action-Packed": (
+        "start at sunrise (≤ 30 min after). Cover ground all day. "
+        "Each stop: 1–1.5 h. Cluster stops geographically to keep travel under 20 min each. "
+        "FEASIBILITY: (stops × avg duration) + inter-stop travel must fit before sunset — "
+        "cut a stop rather than spill past sunset. Dinner is the final stop."
+    ),
+}
+
+# Accommodation type → neighbourhood and stay-context guidance. Budget caps
+# spend; accommodation type guides where to base and what context to mention.
+_ACCOMMODATION_HINT: dict[str, str] = {
+    "Hostel": "social hostel area — mention party streets, cheap eats, hostel common-room culture nearby",
+    "Budget Hotel": "functional base — lean on street food and local transport",
+    "Airbnb / Homestay": "local neighbourhood immersion — mention the street corner, neighbourhood chai stall, morning market",
+    "Luxury Hotel": "five-star base — hotel amenities (spa, pool, rooftop bar) are valid stop options; suggest upscale dining nearby; budget still caps all other spend",
 }
 
 

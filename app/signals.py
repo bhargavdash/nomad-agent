@@ -747,6 +747,7 @@ def _build_query_modifiers(
     crowd_level: str,
     festivals: list[tuple[str, str]],
     vibes: list[str],
+    preferences: str | None = None,
 ) -> list[str]:
     mods = list(base)  # season-derived modifiers passed in
 
@@ -796,6 +797,14 @@ def _build_query_modifiers(
     for v in vibes:
         if v and v.lower() not in {q.lower() for q in mods}:
             mods.append(v)
+
+    # User's free-text preferences: tokenize and append so pool_filter can
+    # score cached discoveries against the traveler's own words.
+    if preferences:
+        import re as _re
+        for tok in _re.sub(r"[^a-z0-9 ]+", " ", preferences.lower()).split():
+            if len(tok) > 3 and tok.lower() not in {q.lower() for q in mods}:
+                mods.append(tok)
 
     # Deduplicate while preserving order.
     seen: set[str] = set()
@@ -850,7 +859,8 @@ def extract_signals(trip_params: TripParams) -> TravelSignals:
     pace_density = _PACE_DENSITY.get(trip_params.pace, 4)
     vibe_source_weights = _vibe_weights(trip_params.vibes)
     query_modifiers = _build_query_modifiers(
-        season_modifiers, season, crowd_level, festivals, trip_params.vibes
+        season_modifiers, season, crowd_level, festivals, trip_params.vibes,
+        preferences=trip_params.preferences,
     )
     warnings = _build_warnings(season, region, destination_lower, weather_hint)
     seasonal_tips = _build_seasonal_tips(season, region, month, destination_lower)
@@ -1111,7 +1121,8 @@ async def enrich_signals_with_llm(signals: TravelSignals, trip_params: TripParam
     festivals = _find_active_festivals(dest_key, trip_params.date_from, trip_params.date_to)
     crowd_level = _crowd_level(season, festivals)
     query_modifiers = _build_query_modifiers(
-        season_modifiers, season, crowd_level, festivals, trip_params.vibes
+        season_modifiers, season, crowd_level, festivals, trip_params.vibes,
+        preferences=trip_params.preferences,
     )
     warnings = _build_warnings(season, classification.region, dest_key, weather_hint)
     seasonal_tips = _build_seasonal_tips(season, classification.region, month, dest_key)

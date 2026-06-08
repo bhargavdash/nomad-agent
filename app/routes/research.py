@@ -100,12 +100,13 @@ async def _run_and_persist(trip_params: TripParams) -> None:
     """
     t0 = time.perf_counter()
     logger.info(
-        "━━━ PIPELINE START  trip_id=%s  dest=%r  days=%s  vibes=%r  pace=%s ━━━",
+        "━━━ PIPELINE START  trip_id=%s  dest=%r  days=%s  vibes=%r  pace=%s  prefs=%r ━━━",
         trip_params.trip_id,
         trip_params.destination,
         trip_params.duration_days,
         trip_params.vibes,
         trip_params.pace,
+        trip_params.preferences or "",
     )
     pacer_task = asyncio.create_task(_progress_pacer(trip_params.trip_id))
 

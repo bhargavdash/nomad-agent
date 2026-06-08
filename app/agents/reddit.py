@@ -579,8 +579,9 @@ async def _extract_via_llm(
         f"Season: {signals.season} (crowd level: {signals.crowd_level})\n"
         f"{festival_line}"
         f"{crowd_line}"
-        f"Vibes: {', '.join(trip_params.vibes) if trip_params.vibes else '—'}\n\n"
-        f"Reddit posts (with top comments):\n\n"
+        f"Vibes: {', '.join(trip_params.vibes) if trip_params.vibes else '—'}\n"
+        + (f"Traveler's own words (highest priority): {trip_params.preferences}\n" if trip_params.preferences else "")
+        + f"\nReddit posts (with top comments):\n\n"
         f"{_format_posts_for_prompt(posts)}\n\n"
         f"Extract up to 8 concrete insights about {trip_params.destination}. "
         f"Empty list is acceptable if posts don't carry concrete {trip_params.destination}-"

@@ -57,6 +57,14 @@ VOICE RULES (the itinerary must not read like an LLM wrote it):
 
 23. TRAVEL-DAY COHERENCE. On a day that moves between cities, the travel leg is the FIRST stop (e.g. "Overnight train to Jaisalmer", "Morning drive to Jodhpur — ~5h"). Do NOT schedule any stop in the destination city BEFORE the traveler arrives there — arrival-day stops must come after the journey, and should be light (check-in, a short walk, a nearby dinner). Stops in the city you're leaving go on the previous day.
 
+PACE RULES (supplement rule 2's stop-count ceiling — use the Voice cues block for per-trip values):
+P1. SLOW & SOULFUL — every stop duration must be ≥ 2 h. Favour places to sit in (cafés, gardens, viewpoints, slow markets, neighbourhood walks with no clock). Include at least one "just be here" stop per day. If geo_brief gives a sunrise time, day starts ~2 h after it. Never chain back-to-back dense museums in a Slow trip.
+P2. ACTION-PACKED — day begins at sunrise (≤ 30 min after, per geo_brief if given). Each stop ≤ 1.5 h. MANDATORY FEASIBILITY: before emitting the day, check (stop count × avg duration) + (inter-stop travel ≈ 20 min each) fits before sunset. If not, drop the weakest stop. Geographic clustering is required — stops must be in the same area or adjacent areas. Dinner is always the final stop (evening slot).
+P3. BALANCED — vary the rhythm: a denser day (4 stops) should be followed by a lighter one (2–3 stops). Day begins ~1 h after sunrise. Always include a proper sit-down meal. Not every day should be the same density.
+
+P4. ACCOMMODATION CONTEXT — `stay_by_city` must match the accommodation type from the Voice cues block: Hostel → social/backpacker area; Airbnb/Homestay → residential local neighbourhood; Luxury Hotel → upscale area, and hotel amenities (spa, rooftop bar) are valid stop options. Budget tier always caps spend — accommodation type shapes neighbourhood feel and context only.
+P5. GROUP SIZE — solo: include ≥ 1 solo-friendly safety or logistics note. Couple: include 1–2 romantic-moment stops (rooftop, quiet beach, candlelit dinner). Group ≥ 5: prefer large-capacity venues; flag where advance booking is critical.
+
 EXAMPLES (illustrate the standard — don't copy them):
 - BAD day description: "Today you'll explore Jaipur's heritage and architecture."
 - GOOD day description: "Start at Hawa Mahal before 9 — the morning sun lights up the sandstone honeycomb. Walk down Tripolia Bazaar to City Palace, lunch on dal baati churma at LMB, then catch sunset from Nahargarh."
