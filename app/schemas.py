@@ -4,9 +4,9 @@ Matches section 5 of AI_INTEGRATION_PLAN.md exactly. Field names are the
 contract between the Node and Python services — do not rename.
 """
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 SourceType = Literal["youtube", "reddit", "blog", "maps"]
 # Note: "maps" is the wire value for synthesizer-padded anchor stops (NOT a
@@ -24,7 +24,12 @@ class TripParams(BaseModel):
     date_from: str | None = None
     date_to: str | None = None
     duration_days: int = 7
-    travelers: Literal["1", "2", "3+", "large"] = "2"
+    # Stringified integer count of travellers ("1".."10"). Stored verbatim as a
+    # string to keep the Node↔Python wire format and the Prisma `String?` column
+    # unchanged. The pattern rejects non-numeric input (e.g. "ten") while
+    # accepting any positive integer; the 1-10 ceiling is enforced UI-side and
+    # by the Zod schema in nomad-api.
+    travelers: Annotated[str, StringConstraints(pattern=r"^\d+$")] = "2"
     vibes: list[str] = Field(default_factory=list)
     accommodation: str = "Hotel"
     pace: Literal["Slow & Soulful", "Balanced", "Action-Packed"] = "Balanced"
