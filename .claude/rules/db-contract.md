@@ -52,7 +52,7 @@ Content-Type: application/json
   "duration_days": 7,
   "travelers": "2",
   "vibes": ["beaches", "hidden gems"],
-  "accommodation": "Boutique Villa",
+  "accommodation": "Airbnb / Homestay",
   "pace": "Balanced",
   "budget": "$$",
   "preferences": null

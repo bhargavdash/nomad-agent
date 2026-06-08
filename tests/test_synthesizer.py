@@ -58,7 +58,7 @@ def _trip(**overrides: Any) -> TripParams:
         duration_days=7,
         travelers="2",
         vibes=["beaches", "nightlife"],
-        accommodation="Boutique Villa",
+        accommodation="Airbnb / Homestay",
         pace="Balanced",
         budget="Medium",
         preferences=None,

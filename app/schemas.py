@@ -31,7 +31,7 @@ class TripParams(BaseModel):
     # by the Zod schema in nomad-api.
     travelers: Annotated[str, StringConstraints(pattern=r"^\d+$")] = "2"
     vibes: list[str] = Field(default_factory=list)
-    accommodation: str = "Hotel"
+    accommodation: str = "Budget Hotel"
     pace: Literal["Slow & Soulful", "Balanced", "Action-Packed"] = "Balanced"
     budget: Literal["Low", "Medium", "High", "Very-High"] = "Medium"
     preferences: str | None = None

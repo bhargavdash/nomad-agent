@@ -23,7 +23,7 @@ def _valid_trip_payload() -> dict:
         "duration_days": 7,
         "travelers": "2",
         "vibes": ["beaches"],
-        "accommodation": "Boutique Villa",
+        "accommodation": "Airbnb / Homestay",
         "pace": "Balanced",
         "budget": "Medium",
         "preferences": None,
