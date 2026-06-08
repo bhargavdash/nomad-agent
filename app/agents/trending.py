@@ -59,11 +59,14 @@ Rules:
   * monsoon favours offbeat / lush / non-coastal places, avoids most beaches
   * post-monsoon is peak travel — broad mix
 - Every entry must be a SPECIFIC place — a city, region, or landmark — NEVER a
-  whole country. "country" is the nation that place sits in and must be
-  different from "name" (e.g. name "Bali" / country "Indonesia"; name "Kyoto" /
-  country "Japan"; name "Manali" / country "India").
+  whole country. "country" must be different from "name" (e.g. name "Bali" /
+  country "Indonesia"; name "Kyoto" / country "Japan").
 - India list: only specific places inside India (cities / regions / hill
-  stations), each with country "India".
+  stations). For these entries "country" MUST be the Indian state or union
+  territory the place is in — NEVER the string "India"
+  (e.g. name "Manali" / country "Himachal Pradesh"; name "Jaipur" /
+  country "Rajasthan"; name "Goa" / country "Goa";
+  name "Rishikesh" / country "Uttarakhand").
 - International list: specific places (cities / regions / islands) outside
   India that are realistic for an Indian passport holder — favour
   visa-on-arrival, e-visa, or easy-visa countries.
