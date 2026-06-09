@@ -526,24 +526,21 @@ _BUDGET_HINT: dict[str, str] = {
 
 # Pace → day-shape guidance injected into voice_cues. Compact gloss only —
 # the synthesizer.md PACE RULES carry the full principles to avoid duplication.
-# Sunrise-anchored start times assume geo_brief sunrise is already in the prompt
-# (rule 22); these offsets tell the LLM how to interpret it per pace.
 _PACE_HINT: dict[str, str] = {
     "Slow & Soulful": (
         "linger and go deep, not wide — sit in places, soak atmosphere. "
-        "Start ~2 h after sunrise. Each stop: 2–3 h. "
-        "Favour cafés, gardens, markets, viewpoints to sit at. 2–3 stops/day is ideal."
+        "Favour cafés, gardens, markets, viewpoints. 2–3 stops/day is ideal. "
+        "Each stop should get real, unhurried time — let each place breathe."
     ),
     "Balanced": (
-        "mix of active and restful. Start ~1 h after sunrise. "
-        "3–4 stops/day; vary density across days — a busier day earns a lighter one. "
-        "Include a proper sit-down meal."
+        "mix of active and restful. 3–4 stops/day; vary density across days — "
+        "a busier day earns a lighter one. Include a proper sit-down meal."
     ),
     "Action-Packed": (
-        "start at sunrise (≤ 30 min after). Cover ground all day. "
-        "Each stop: 1–1.5 h. Cluster stops geographically to keep travel under 20 min each. "
-        "FEASIBILITY: (stops × avg duration) + inter-stop travel must fit before sunset — "
-        "cut a stop rather than spill past sunset. Dinner is the final stop."
+        "pack the full day from early morning through the evening. "
+        "Let each stop breathe the time it actually needs — a major fort or national park "
+        "may warrant 3–5 h; a viewpoint may only need 30–45 min. "
+        "Cluster stops geographically to minimise transit. Dinner is the final stop."
     ),
 }
 

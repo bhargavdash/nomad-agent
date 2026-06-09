@@ -173,14 +173,9 @@ class GeoBrief:
             lines.append("Inter-city legs (by road, approximate):")
             for leg in self.legs:
                 lines.append(f"  {leg.from_city} → {leg.to_city}: ~{leg.km} km ({leg.drive_hint})")
-        if self.sun:
-            lines.append("Sunrise / sunset (local, for time-of-day hooks):")
-            for city, (sr, ss) in self.sun.items():
-                lines.append(f"  {city}: sunrise {sr}, sunset {ss}")
         lines.append(
             "Visit cities in the order above (it minimises backtracking). Cite the "
-            "real distances/drive-times in transport_strategy, and use the sun "
-            "times for sunrise/sunset hooks. Do NOT place a landmark in a city it "
+            "real distances/drive-times in transport_strategy. Do NOT place a landmark in a city it "
             "isn't in."
         )
         return "\n".join(lines)
