@@ -219,6 +219,7 @@ async def update_trip_overview(trip_id: str, itinerary: AIItinerary) -> None:
         "seasonal_tips": itinerary.seasonal_tips,
         "stay_by_city": itinerary.stay_by_city,
         "budget_estimate": itinerary.budget_estimate,
+        "currency_advice": itinerary.currency_advice,
     }
 
     def _write() -> None:

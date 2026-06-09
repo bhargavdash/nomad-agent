@@ -76,7 +76,8 @@ class AIItinerary(BaseModel):
     transport_strategy: str | None = None  # how to move between/within cities
     seasonal_tips: list[str] = Field(default_factory=list)  # from signals (deterministic)
     stay_by_city: dict[str, str] = Field(default_factory=dict)  # {city: "area + tier"}
-    budget_estimate: str | None = None  # rough cost blurb
+    budget_estimate: str | None = None  # rough cost blurb, INR-primary
+    currency_advice: str | None = None  # exchange rate + spend tip (international only)
     discoveries: list[ResearchDiscovery] = Field(..., min_length=3, max_length=12)
     days: list[AIDay] = Field(..., min_length=1)
 

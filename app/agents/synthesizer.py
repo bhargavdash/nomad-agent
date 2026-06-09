@@ -295,6 +295,7 @@ class _LLMItineraryDraft(BaseModel):
     transport_strategy: str = Field(default="")
     stay_by_city: dict[str, str] = Field(default_factory=dict)
     budget_estimate: str = Field(default="")
+    currency_advice: str = Field(default="")
     days: list[_LLMDay] = Field(default_factory=list)
 
     @field_validator("stay_by_city", mode="before")
@@ -803,6 +804,7 @@ def _llm_draft_to_itinerary(
         seasonal_tips=list(signals.seasonal_tips) if signals else [],
         stay_by_city=dict(draft.stay_by_city),
         budget_estimate=(draft.budget_estimate.strip() or None),
+        currency_advice=(draft.currency_advice.strip() or None),
         discoveries=discoveries_out,
         days=ai_days,
     )
