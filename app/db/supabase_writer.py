@@ -125,6 +125,29 @@ async def fetch_locked_stops(trip_id: str) -> list[LockedStop]:
     return await asyncio.to_thread(_load)
 
 
+async def fetch_city_images(trip_id: str) -> dict[str, str | None]:
+    """Existing per-city hero URLs so a refine rewrite can keep imagery."""
+
+    def _load() -> dict[str, str | None]:
+        client = _get_client()
+        resp = (
+            client.table("itinerary_days")
+            .select("city, image_url")
+            .eq("trip_id", trip_id)
+            .execute()
+        )
+        out: dict[str, str | None] = {}
+        for row in cast("list[dict[str, Any]]", resp.data or []):
+            city = str(row.get("city") or "").strip()
+            if not city or city in out:
+                continue
+            url = row.get("image_url")
+            out[city] = str(url) if url else None
+        return out
+
+    return await asyncio.to_thread(_load)
+
+
 async def write_itinerary(
     trip_id: str,
     itinerary: AIItinerary,
