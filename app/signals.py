@@ -77,6 +77,12 @@ class TravelSignals:
     # to score the broad cached pool toward the user's preferred category.
     vibe_cluster: str = "adventure"
 
+    # FI-8 — personalization signal, not a risk flag. Empty unless the trip
+    # opted into women-solo practical context. Kept as tip strings so we do
+    # not ship invented neighborhood denylists.
+    women_solo_traveller: bool = False
+    safety_context: list[str] = field(default_factory=list)
+
 
 # ---------------------------------------------------------------------------
 # Lookup tables — region detection
@@ -679,6 +685,30 @@ def _build_seasonal_tips(
     return tips
 
 
+def _solo_women_tips(region: str) -> list[str]:
+    """Practical, agency-preserving tips. No neighborhood denylist."""
+    tips = [
+        "Prefer registered ride-hail or hotel-arranged cars after dark over unmarked cabs.",
+        "Pick a stay with 24h reception and a social common area on night one.",
+        "Lean toward group tours, women-owned businesses, and well-trafficked evening streets when they fit the vibe — still adventurous, not curfewed.",
+    ]
+    if region == "india":
+        tips.append(
+            "Share live trip status on ride-hail; treat empty late trains as a last resort."
+        )
+    return tips
+
+
+def _women_solo_overlay(trip_params: TripParams, region: str) -> tuple[bool, list[str], list[str]]:
+    if not trip_params.women_solo_traveller:
+        return False, [], []
+    return (
+        True,
+        ["solo female travel", "women-owned", "group tour", "social hostel"],
+        _solo_women_tips(region),
+    )
+
+
 # Destination-keyword → local currency. Multi-currency regions (Europe, SEA,
 # Americas, Oceania) need country-level overrides; India is unambiguous by
 # region. Anything not matched returns None and the synthesizer infers it.
@@ -866,6 +896,9 @@ def extract_signals(trip_params: TripParams) -> TravelSignals:
     seasonal_tips = _build_seasonal_tips(season, region, month, destination_lower)
     currency_hint = _currency_hint(region, destination_lower)
     cluster = _vibe_cluster(trip_params.vibes)
+    women_solo, extra_mods, safety = _women_solo_overlay(trip_params, region)
+    if extra_mods:
+        query_modifiers = list(query_modifiers) + extra_mods
 
     return TravelSignals(
         region=region,
@@ -883,6 +916,8 @@ def extract_signals(trip_params: TripParams) -> TravelSignals:
         seasonal_tips=seasonal_tips,
         currency_hint=currency_hint,
         vibe_cluster=cluster,
+        women_solo_traveller=women_solo,
+        safety_context=safety,
     )
 
 
@@ -1127,6 +1162,9 @@ async def enrich_signals_with_llm(signals: TravelSignals, trip_params: TripParam
     warnings = _build_warnings(season, classification.region, dest_key, weather_hint)
     seasonal_tips = _build_seasonal_tips(season, classification.region, month, dest_key)
     currency_hint = _currency_hint(classification.region, dest_key)
+    women_solo, extra_mods, safety = _women_solo_overlay(trip_params, classification.region)
+    if extra_mods:
+        query_modifiers = list(query_modifiers) + extra_mods
 
     logger.info(
         "signals.llm_enriched dest=%r region=%s hemisphere=%s season=%s",
@@ -1152,4 +1190,6 @@ async def enrich_signals_with_llm(signals: TravelSignals, trip_params: TripParam
         seasonal_tips=seasonal_tips,
         currency_hint=currency_hint,
         vibe_cluster=signals.vibe_cluster,
+        women_solo_traveller=women_solo,
+        safety_context=safety,
     )
