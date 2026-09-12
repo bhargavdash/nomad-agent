@@ -46,23 +46,22 @@ class Settings(BaseSettings):
 
     # --- Per-role LLM provider/model selection ---
     LLM_YOUTUBE_PROVIDER: str = "groq"
-    LLM_YOUTUBE_MODEL: str = "llama-3.3-70b-versatile"
+    LLM_YOUTUBE_MODEL: str = "qwen/qwen3.8-27b"
     # Long-form YouTube agent: same defaults as Shorts; override per-env if a
     # bigger model is justified for the longer transcript context.
     LLM_YOUTUBE_LONGFORM_PROVIDER: str = "groq"
-    LLM_YOUTUBE_LONGFORM_MODEL: str = "llama-3.3-70b-versatile"
+    LLM_YOUTUBE_LONGFORM_MODEL: str = "qwen/qwen3.8-27b"
     LLM_REDDIT_PROVIDER: str = "groq"
-    LLM_REDDIT_MODEL: str = "llama-3.3-70b-versatile"
+    LLM_REDDIT_MODEL: str = "qwen/qwen3.8-27b"
     LLM_GOOGLE_PROVIDER: str = "groq"
-    LLM_GOOGLE_MODEL: str = "llama-3.3-70b-versatile"
-    # Synthesizer: quality-critical step. Default to Cerebras' GLM-4.7 model
-    # (free tier, far stronger than 70B), with a Groq 70B fallback so a
-    # free-tier queue/error never turns into a hard failure. If the
-    # fallback provider/model equals the primary, no fallback is attached.
+    LLM_GOOGLE_MODEL: str = "qwen/qwen3.8-27b"
+    # Synthesizer: quality-critical. Cerebras gpt-oss-120b (structured JSON,
+    # ~120B) with Groq openai/gpt-oss-120b fallback. qwen-3.8-27b is the
+    # Cerebras default for smaller structured calls (geo / trending).
     LLM_SYNTH_PROVIDER: str = "cerebras"
-    LLM_SYNTH_MODEL: str = "zai-glm-4.7"
+    LLM_SYNTH_MODEL: str = "gpt-oss-120b"
     LLM_SYNTH_FALLBACK_PROVIDER: str = "groq"
-    LLM_SYNTH_FALLBACK_MODEL: str = "llama-3.3-70b-versatile"
+    LLM_SYNTH_FALLBACK_MODEL: str = "openai/gpt-oss-120b"
     # Cerebras' free tier can queue at peak hours and block a request. Bound the
     # wait so a queue-block surfaces as a timeout *exception* — which the
     # synthesizer's get_structured_llm fallback routes to Groq — instead of
@@ -73,19 +72,14 @@ class Settings(BaseSettings):
     # Tiny LLM call used only when the keyword-based region map misses; one
     # cached call per destination, ~50 tokens out. Cheap model is fine.
     LLM_SIGNALS_CLASSIFIER_PROVIDER: str = "groq"
-    LLM_SIGNALS_CLASSIFIER_MODEL: str = "llama-3.3-70b-versatile"
+    LLM_SIGNALS_CLASSIFIER_MODEL: str = "qwen/qwen3.8-27b"
     # Geo city-circuit picker (Milestone D) — small output (ordered city list).
-    # Defaults to Cerebras: it's a tiny call, and keeping it off Groq avoids
-    # competing with the research agents for Groq's tight ~100k tokens/day cap
-    # (which would silently degrade the geo layer).
     LLM_GEO_PLANNER_PROVIDER: str = "cerebras"
-    LLM_GEO_PLANNER_MODEL: str = "zai-glm-4.7"
+    LLM_GEO_PLANNER_MODEL: str = "qwen-3.8-27b"
     # SA-8 trending agent — single seasonal call producing 10 India + 10
-    # international destinations with blurbs. Defaults to Cerebras GLM-4.7
-    # because the call is small, the output is structured JSON, and the
-    # cadence is ~4 calls/year so cost is effectively zero.
+    # international destinations with blurbs.
     LLM_TRENDING_PROVIDER: str = "cerebras"
-    LLM_TRENDING_MODEL: str = "zai-glm-4.7"
+    LLM_TRENDING_MODEL: str = "qwen-3.8-27b"
 
     # --- Provider API keys (optional — only checked when used) ---
     GROQ_API_KEY: str = ""
