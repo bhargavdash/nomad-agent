@@ -35,6 +35,7 @@ class TripParams(BaseModel):
     pace: Literal["Slow & Soulful", "Balanced", "Action-Packed"] = "Balanced"
     budget: Literal["Low", "Medium", "High", "Very-High"] = "Medium"
     preferences: str | None = None
+    women_solo_traveller: bool = False
 
 
 class ResearchDiscovery(BaseModel):

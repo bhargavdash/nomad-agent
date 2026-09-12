@@ -73,6 +73,17 @@ def test_currency_hint_by_destination() -> None:
     assert extract_signals(_trip(destination="Atlantis")).currency_hint is None
 
 
+def test_women_solo_flag_adds_practical_context_not_warnings() -> None:
+    off = extract_signals(_trip(travelers="1"))
+    assert off.women_solo_traveller is False
+    assert off.safety_context == []
+    on = extract_signals(_trip(travelers="1", women_solo_traveller=True))
+    assert on.women_solo_traveller is True
+    assert on.safety_context
+    assert "solo female travel" in on.query_modifiers
+    assert all("don't go out after" not in t.lower() for t in on.safety_context)
+
+
 # ---------------------------------------------------------------------------
 # Existing (back-compat) tests — kept passing.
 # ---------------------------------------------------------------------------

@@ -430,6 +430,13 @@ def _format_signal_summary(signals: TravelSignals) -> str:
         parts.append("Seasonal tips: " + " | ".join(signals.seasonal_tips))
     if signals.currency_hint:
         parts.append(f"Local currency: {signals.currency_hint}")
+    if signals.women_solo_traveller:
+        parts.append(
+            "Women solo traveller: practical safety + social context "
+            "(group tours, women-owned, well-lit evenings) — not a curfew."
+        )
+        if signals.safety_context:
+            parts.append("Solo context: " + " | ".join(signals.safety_context))
     return "\n".join(parts)
 
 
@@ -477,6 +484,13 @@ def _build_prompt(
         "Budget caps spend; accommodation type guides neighbourhood feel and stay context.\n"
         f"Group: {travelers_hint}\n"
     )
+    if trip_params.women_solo_traveller:
+        voice_cues += (
+            "Women traveling solo: keep the trip adventurous. Prioritize discoveries "
+            "that mention female guides, women-owned places, group tours, and social "
+            "hostels. Put one practical note on Day 1 (stay with 24h reception, "
+            "registered ride-hail). Do not invent curfews or banned neighborhoods.\n"
+        )
     # The traveler's free-text request is the single most direct expression of
     # intent. It MUST win over generic vibe inference when the two conflict.
     prefs = (trip_params.preferences or "").strip()
