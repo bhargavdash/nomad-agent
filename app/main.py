@@ -16,6 +16,7 @@ logging.basicConfig(
 # Import routers AFTER logging.basicConfig so logging is configured before any
 # transitive module-level logger setup runs. (E402 is intentional here.)
 from app.observability import configure_observability  # noqa: E402
+from app.routes.refine import router as refine_router  # noqa: E402
 from app.routes.research import router as research_router  # noqa: E402
 from app.routes.trending import router as trending_router  # noqa: E402
 
@@ -38,6 +39,7 @@ app.add_middleware(
 )
 
 app.include_router(research_router)
+app.include_router(refine_router)
 app.include_router(trending_router)
 
 

@@ -40,6 +40,8 @@ def _resolve_role(role: str) -> tuple[str, str]:
             settings.LLM_TRENDING_PROVIDER,
             settings.LLM_TRENDING_MODEL,
         ),
+        # FI-1: same primary/fallback as synthesizer (structured itinerary JSON).
+        "refiner": (settings.LLM_SYNTH_PROVIDER, settings.LLM_SYNTH_MODEL),
     }
     if role not in mapping:
         raise ValueError(f"Unknown LLM role: {role!r}. Expected one of {list(mapping)}.")
@@ -53,7 +55,7 @@ def _resolve_fallback(role: str) -> tuple[str, str] | None:
     fallback) so a free-tier queue/error never becomes a hard failure. Returns
     None when no fallback is set or when it would duplicate the primary.
     """
-    if role != "synthesizer":
+    if role not in ("synthesizer", "refiner"):
         return None
     provider = settings.LLM_SYNTH_FALLBACK_PROVIDER
     model = settings.LLM_SYNTH_FALLBACK_MODEL

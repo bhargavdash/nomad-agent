@@ -4,7 +4,7 @@ Matches section 5 of AI_INTEGRATION_PLAN.md exactly. Field names are the
 contract between the Node and Python services — do not rename.
 """
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, StringConstraints
 
@@ -83,6 +83,19 @@ class AIItinerary(BaseModel):
     currency_advice: str | None = None  # exchange rate + spend tip (international only)
     discoveries: list[ResearchDiscovery] = Field(..., min_length=3, max_length=12)
     days: list[AIDay] = Field(..., min_length=1)
+
+
+class RefineRequest(TripParams):
+    """FI-1 — targeted itinerary refine (not a full research re-run).
+
+    `current_itinerary` is a dict so real trips that no longer meet
+    AIItinerary mins (user deleted a stop, thin days) still round-trip.
+    The refiner coerces it before the LLM call.
+    """
+
+    instruction: str = Field(..., min_length=1, max_length=2000)
+    current_itinerary: dict[str, Any]
+    locked_stop_ids: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
