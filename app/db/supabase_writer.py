@@ -16,6 +16,7 @@ from storage3.types import FileOptions
 from supabase import Client, create_client
 
 from app.config import settings
+from app.lock import LockedStop, apply_locked_stops
 from app.schemas import AIItinerary, ResearchDiscovery, TrendingPayload
 
 logger = logging.getLogger(__name__)
@@ -76,26 +77,74 @@ async def update_research_job(trip_id: str, **fields: Any) -> None:
     await asyncio.to_thread(_update)
 
 
+async def fetch_locked_stops(trip_id: str) -> list[LockedStop]:
+    """Load locked stop rows for a trip, including their itinerary day number."""
+
+    def _load() -> list[LockedStop]:
+        client = _get_client()
+        days_resp = (
+            client.table("itinerary_days")
+            .select("id, day_number")
+            .eq("trip_id", trip_id)
+            .execute()
+        )
+        day_number_by_id = {
+            row["id"]: int(row["day_number"])
+            for row in cast("list[dict[str, Any]]", days_resp.data or [])
+        }
+        stops_resp = (
+            client.table("stops")
+            .select(
+                "id, day_id, name, time, ampm, duration, description, source, tags, sort_order"
+            )
+            .eq("trip_id", trip_id)
+            .eq("locked", True)
+            .execute()
+        )
+        out: list[LockedStop] = []
+        for row in cast("list[dict[str, Any]]", stops_resp.data or []):
+            day_number = day_number_by_id.get(row.get("day_id"))
+            if day_number is None:
+                continue
+            out.append(
+                LockedStop(
+                    id=str(row["id"]),
+                    day_number=day_number,
+                    name=str(row.get("name") or ""),
+                    time=str(row.get("time") or "9:00"),
+                    ampm=str(row.get("ampm") or "AM"),
+                    duration=str(row.get("duration") or "1h"),
+                    description=str(row.get("description") or row.get("name") or ""),
+                    source=str(row.get("source") or "maps"),
+                    tags=list(row.get("tags") or []),
+                    sort_order=int(row.get("sort_order") or 1),
+                )
+            )
+        return out
+
+    return await asyncio.to_thread(_load)
+
+
 async def write_itinerary(
     trip_id: str,
     itinerary: AIItinerary,
     city_images: dict[str, str | None] | None = None,
 ) -> None:
-    """Write itinerary_days and stops for a trip.
+    """Replace itinerary_days and stops for a trip.
 
-    Inserts one row per day, then per stop. Day rows are inserted first so
-    the returned ids can be used as foreign keys on the stops. `city_images`
-    maps a city name -> resolved (self-hosted) image URL; a day's `image_url`
-    is set from it, or None when the city had no usable photo (the frontend
-    then shows its deterministic themed fallback).
+    Deletes existing day/stop rows first so a refine/rewrite cannot unique-
+    constrain against leftover days. Locked stops are merged in before insert
+    so FI-2 locks survive the rewrite (IDs are new; the FE refetches /full).
     """
     images = city_images or {}
+    locked = await fetch_locked_stops(trip_id)
+    merged = apply_locked_stops(itinerary, locked)
 
     def _write() -> None:
         client = _get_client()
+        client.table("stops").delete().eq("trip_id", trip_id).execute()
+        client.table("itinerary_days").delete().eq("trip_id", trip_id).execute()
 
-        # Insert days. stop_count must be populated here — the FE day card
-        # ("{N} stops planned") reads it directly, see ItineraryReveal.tsx.
         day_rows = [
             {
                 "trip_id": trip_id,
@@ -107,18 +156,16 @@ async def write_itinerary(
                 "stop_count": len(d.stops),
                 "image_url": images.get(d.city),
             }
-            for d in itinerary.days
+            for d in merged.days
         ]
         days_resp = client.table("itinerary_days").insert(day_rows).execute()
         inserted_days = cast("list[dict[str, Any]]", days_resp.data or [])
-        # Map day_number -> id for foreign-key linking.
         day_id_by_number: dict[int, Any] = {
             row["day_number"]: row["id"] for row in inserted_days if "id" in row
         }
 
-        # Insert stops.
         stop_rows: list[dict[str, Any]] = []
-        for d in itinerary.days:
+        for d in merged.days:
             day_id = day_id_by_number.get(d.dayNumber)
             for s in d.stops:
                 stop_rows.append(
@@ -133,6 +180,7 @@ async def write_itinerary(
                         "description": s.description,
                         "source": s.source,
                         "tags": s.tags,
+                        "locked": s.locked,
                     }
                 )
         if stop_rows:

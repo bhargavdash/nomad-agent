@@ -54,6 +54,9 @@ class AIStop(BaseModel):
     description: str = Field(..., min_length=1)
     source: SourceType
     tags: list[str] = Field(..., min_length=1, max_length=4)
+    # FI-2: echoed through rewrite/refine. Default false so existing drafts
+    # and tests stay valid. The writer persists this onto `stops.locked`.
+    locked: bool = False
 
 
 class AIDay(BaseModel):
